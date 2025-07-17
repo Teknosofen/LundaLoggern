@@ -2,9 +2,6 @@
 #define CONSTANTS_H
 
 
-// Graphix CFG
-#define LCD_WIDTH  536
-#define LCD_HEIGHT 240
 
 // clockpos
 #define CLOCK_SIZE 60
