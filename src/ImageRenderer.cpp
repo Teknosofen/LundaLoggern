@@ -45,22 +45,66 @@ void ImageRenderer::drawSwatch(int x, int y, uint16_t color, const char *label, 
   tft.print(label);
 }
 
+
 void ImageRenderer::drawSDStatusIndicator(bool isPresent) {
-   
-    const uint16_t color = isPresent ? 0x07E0 : 0xF800; // Green or Red
-    const char* label = isPresent ? "SD OK" : "SD FAIL";
-    
-    int textWidth  = tft.textWidth("SD FAIL"); // adopt to the longest message
-    int textHeight = tft.fontHeight();
-    const int padding = 10;
-    int boxWidth  = textWidth + padding * 2;
-    int boxHeight = textHeight + padding;
+  const uint16_t color     = isPresent ? 0x07E0 : 0xF800;  // Green or Red
+  const uint16_t backColor = isPresent ? 0x0330 : 0x4000;  // Dark Green or Dark Red
+  const char* label        = isPresent ? "SD OK" : "SD FAIL";
 
-    int x = TFT_HEIGHT - textWidth - 10; // Right-aligned with margin
-    int y = 140; // Vertical position under logo; tweak if needed
+  // 🔧 Backup current font settings
+  // const GFXfont* prevFont = tft.getFreeFont();
+  uint8_t        prevDatum    = tft.getTextDatum();
+  uint16_t       prevFGColor  = tft.textcolor;
+  uint16_t       prevBGColor  = tft.textbgcolor;
 
-    tft.setTextColor(color, TFT_LOGOBACKGROUND); // Set text color and background
-    tft.fillRect(x, y, boxWidth, boxHeight, TFT_LOGOBACKGROUND); // Clear area for text
-    tft.setCursor(x + padding, y + (boxHeight - textHeight) / 2);
-    tft.print(label);
+  // 🖋️ Apply swatch-specific font settings
+  tft.setFreeFont(FSSB9);                    // Larger, readable font
+  tft.setTextColor(color, backColor);        // Foreground & background
+  tft.setTextDatum(MC_DATUM);                // Middle Center alignment
+
+  int textWidth  = tft.textWidth("SD FAIL"); // adopt to the longest message
+  int textHeight = tft.fontHeight();         // Font height
+  const int paddingX = 4;
+  const int paddingY = 4;
+
+  int boxWidth  = textWidth + paddingX * 2;
+  int boxHeight = textHeight + paddingY * 2;
+
+  int x = TFT_HEIGHT - boxWidth - 10;        // Right-aligned
+  int y = 135;                                // Position under logo
+  int cx = x + boxWidth / 2;
+  int cy = y + boxHeight / 2;
+
+  tft.fillRoundRect(x, y, boxWidth, boxHeight, 5, backColor);
+  tft.drawString(label, cx, cy);             // Centered text
+
+  // 🔄 Restore previous font settings
+  // tft.setFreeFont(prevFont);
+  tft.setTextDatum(prevDatum);
+  tft.setTextColor(prevFGColor, prevBGColor);
+
 }
+
+// void ImageRenderer::drawSDStatusIndicator(bool isPresent) {  
+//     const uint16_t color     = isPresent ? 0x07E0 : 0xF800; // Green or Red
+//     const uint16_t BackColor = isPresent ? 0x0330 : 0x4000; // contrasting Green or Red
+//     const char* label = isPresent ? "SD OK" : "SD FAIL";
+//     tft.setFreeFont(FSSB12); // Set a larger font for better visibility
+    
+//     int textWidth  = tft.textWidth("SD FAIL"); // adopt to the longest message
+//     int textHeight = tft.fontHeight();
+//     const int padding = 6;
+//     int boxWidth  = textWidth + padding * 2;
+//     int boxHeight = textHeight + padding;
+
+//     int x = TFT_HEIGHT - textWidth - 15; // Right-aligned with margin
+//     int y = 140; // Vertical position under logo; tweak if needed
+
+//     tft.setTextColor(color, BackColor); // Set text color and background
+//     // tft.fillRect(x, y, boxWidth, boxHeight, BackColor); // Clear area for text
+//     int radius = 5;
+//     tft.fillRoundRect(x, y, boxWidth, boxHeight, radius, BackColor);
+//     tft.setCursor(x + padding, y + (boxHeight - textHeight) / 2);
+//     tft.print(label);
+    
+// }

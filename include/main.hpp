@@ -31,6 +31,9 @@
 #define SET_LOOP_TIME 1000                                  // slow loop update in [ms]
 
 #include <Arduino.h>
+
+#include "Free_Fonts.h" // Optional helper for shorthand like FSB24
+
 #include "constants.h"
 #include <TFT_eSPI.h>
 #include <SPI.h>

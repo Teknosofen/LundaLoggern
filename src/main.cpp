@@ -96,45 +96,48 @@ void setup() {
 }
 
 void loop() {
+
   static bool initLoop = false; // Flag to check if loop has been initialized
   if (!initLoop) {
     initLoop = true; // Set the flag to true to indicate loop has been initialized
     hostCom.println("LundaLogger loop initialized");
-    renderer.drawSwatch(10, 10, TFT_DARKERBLUE, "INIT");
-    delay(2000); // Delay to allow the display to show the message
+    renderer.drawSwatch(100, 10, TFT_DARKERBLUE, "INIT");
+    delay(500); // Delay to allow the display to show the message
     tft.fillScreen(TFT_LOGOBACKGROUND); // Clear the display with blue color
+    tft.setTextSize(1); // Set text size for the next line
     renderer.pushFullImage(220, 40, 100, 100, lundaLogo);
-    // renderer.drawSwatch(10, 40, TFT_DEEPBLUE, "DEEPBLUE");
-    // renderer.drawSwatch(10, 70, TFT_SLATEBLUE, "SLATEBLUE", true);
     renderer.drawSDStatusIndicator(sd.isCardPresent());
   }
-  // put your main code here, to run repeatedly:
-  // uint16_t bgColor = lundaLogo[0]; // Top-left pixel'uint16_t imageColor = myImage[0]; // Assume this is 0xBA85 in little-endian
-  // tft.fillScreen((bgColor >> 8) | (bgColor << 8)); // Should match image
 
+  static uint32_t loopStartTime = millis(); // Record the start time of the loop
+  hostCom.println("LundaLogger loop started");
+  if (micros() - loopStartTime > SET_LOOP_TIME) { // time loop
+    // Check if enough time has passed since the last loop iteration
+    loopStartTime = micros(); // Reset the start time for the next loop
+
+    /// screen gfx stuff
+    
   tft.setTextColor(TFT_DEEPBLUE, TFT_LOGOBACKGROUND); // Set text color and background
   tft.setTextSize(2); // Set text size
   tft.setCursor(10, 10); // Set cursor position
-  tft.drawString("LundaLogger Loop", 10, 10, 2); // Print a message on the display
+  tft.drawString("LundaLogger", 10, 10, 2); // Print a message on the display
   tft.setCursor(10, 50); // Set cursor position for next line
+  tft.setTextSize(1); // Set text size for the next line
   tft.drawString("Running...", 10, 50, 2); // Print another message on the display
 
-  // renderer.drawSwatch(10, 10, TFT_DARKERBLUE, "DARKERBLUE");
-  // renderer.drawSwatch(10, 40, TFT_DEEPBLUE, "DEEPBLUE");
-  // renderer.drawSwatch(10, 70, TFT_SLATEBLUE, "SLATEBLUE", true);
-  // renderer.drawSwatch(10, 100, 100, 20,  TFT_MIDNIGHTBLUE, "MIDNIGHTBLUE");
-
-  delay(SET_LOOP_TIME); // Wait for the defined loop time
-  hostCom.println("looping..."); // Print a message to the host serial port
-  
-
   if (sd.updateCardStatus()) {
-    Serial.println("🔄 SD status changed!");
+    hostCom.println("🔄 SD status changed!");
     // Optional: trigger redraw, disable logging, etc.
     renderer.drawSDStatusIndicator(sd.isCardPresent());
     hostCom.print("SD status updated: ");
     hostCom.println(sd.isCardPresent() ? "true" : "false");
   }
   
+    // renderer.pushFullImage(220, 40, 100, 100, lundaLogo);
+    hostCom.println("looping..."); // Print a message to the host serial port
+
+  } else {
+  }
+
 
   }
