@@ -12,6 +12,9 @@ SPIClass hspi(HSPI);
 const SPISettings SENSOR_SPI_SETTINGS = SPISettings(800000, MSBFIRST, SPI_MODE0);
 SDManager sd(hspi, HSPI_CS); // Pass your CS pin here
 
+WifiApServer WiFiserver("LundaLoggern", "neonatal");
+
+
 void setup() {
 
   delay(3000); // Wait for 3 seconds before starting setup
@@ -58,31 +61,25 @@ void setup() {
   tft.println("LundaLogger Ready"); // Print a message on the display
   delay(1000); // Delay to allow the display to show the message
 
-  // spriteLeft.createSprite(LCD_WIDTH, LCD_HEIGHT);
-  // spriteLeft.setTextColor(TFT_WHITE, TFT_BLACK);
-  // spriteLeft.drawString("LundaLoggern", 40, 40, 4);
-  // spriteLeft.pushSprite(0, 0);
-  // delay(1000); // Delay to allow the display to show the message
-  
   renderer.pushFullImage(220, 40, 100, 100, lundaLogo);
-  delay(1000); // Delay to allow the display to show the message
+ 
+  WiFiserver.setLogoData(lundaLogo, 100, 100);
+  WiFiserver.setTextAndValues("LundaLogger", 23.5, 67.8, 1013.2, 3.7);
+  WiFiserver.setLabel(0, "Temp");
+  WiFiserver.setLabel(1, "Humidity");
+  WiFiserver.setLabel(2, "Pressure");
+  WiFiserver.setLabel(3, "Battery");
 
-  // // Initialize SD card
-  // if (!SD.begin(HSPI_CS, hspi, 8000000))  // 8 MHz
-  //  {
-  //   Serial.println("SD Card initialization failed!");
-  // } else {
-  //   hostCom.println("SD card initialized successfully.");
-  // }
+  WiFiserver.enableSdFileDownloads(true);
+  WiFiserver.enableSdFileDelete(true);
 
-  // Initialize WiFi connection
-  // WiFi.begin("your-SSID", "your-PASSWORD");
-  // while (WiFi.status() != WL_CONNECTED) {
-  //   delay(1000); 
+  WiFiserver.begin();
+  hostCom.print("Access Point IP: ");
+  hostCom.println(WiFiserver.getApIpAddress());
 
-  //   Serial.println("Connecting to WiFi...");
-  // }  
-  // Serial.println("WiFi connected successfully.");
+
+ delay(1000); // Delay to allow the display to show the message
+
   // Serial.print("IP address: ");  
   // Serial.println(WiFi.localIP());
   // Initialize WebServer or WebSocketsServer if needed
@@ -110,28 +107,27 @@ void loop() {
   }
 
   static uint32_t loopStartTime = millis(); // Record the start time of the loop
-  hostCom.println("LundaLogger loop started");
   if (micros() - loopStartTime > SET_LOOP_TIME) { // time loop
     // Check if enough time has passed since the last loop iteration
     loopStartTime = micros(); // Reset the start time for the next loop
 
     /// screen gfx stuff
-    
-  tft.setTextColor(TFT_DEEPBLUE, TFT_LOGOBACKGROUND); // Set text color and background
-  tft.setTextSize(2); // Set text size
-  tft.setCursor(10, 10); // Set cursor position
-  tft.drawString("LundaLogger", 10, 10, 2); // Print a message on the display
-  tft.setCursor(10, 50); // Set cursor position for next line
-  tft.setTextSize(1); // Set text size for the next line
-  tft.drawString("Running...", 10, 50, 2); // Print another message on the display
+    tft.setFreeFont(FSSB24);    
+    tft.setTextColor(TFT_DEEPBLUE, TFT_LOGOBACKGROUND); // Set text color and background
+    // tft.setTextSize(2); // Set text size
+    tft.setCursor(10, 10); // Set cursor position
+    tft.drawString("LundaLogger", 10, 10); // Print a message on the display
+    tft.setCursor(10, 50); // Set cursor position for next line
+    tft.setTextSize(1); // Set text size for the next line
+    tft.drawString(WiFiserver.getApIpAddress(), 10, 50, 2); // Print another message on the display
 
-  if (sd.updateCardStatus()) {
-    hostCom.println("🔄 SD status changed!");
-    // Optional: trigger redraw, disable logging, etc.
-    renderer.drawSDStatusIndicator(sd.isCardPresent());
-    hostCom.print("SD status updated: ");
-    hostCom.println(sd.isCardPresent() ? "true" : "false");
-  }
+    if (sd.updateCardStatus()) {
+      hostCom.println("🔄 SD status changed!");
+      // Optional: trigger redraw, disable logging, etc.
+      renderer.drawSDStatusIndicator(sd.isCardPresent());
+      hostCom.print("SD status updated: ");
+      hostCom.println(sd.isCardPresent() ? "true" : "false");
+    }
   
     // renderer.pushFullImage(220, 40, 100, 100, lundaLogo);
     hostCom.println("looping..."); // Print a message to the host serial port
@@ -139,5 +135,6 @@ void loop() {
   } else {
   }
 
+  WiFiserver.handleClient();  // This keeps the web server alive
 
   }

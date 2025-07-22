@@ -28,7 +28,7 @@
 
 // #define SDCARD_CS_PIN 5
 
-#define SET_LOOP_TIME 1000                                  // slow loop update in [ms]
+#define SET_LOOP_TIME 1000000                               // slow loop update in [ms]
 
 #include <Arduino.h>
 
@@ -43,7 +43,7 @@
 #include "ImageRenderer.hpp"
 #include <SPI.h>
 #include "SDManager.hpp"
-
+#include "WifiApServer.hpp"
 
 #include "ServoCIEData.hpp"
 
