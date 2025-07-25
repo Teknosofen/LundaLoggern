@@ -35,5 +35,7 @@ private:
     void handleFileDownload();
     void handleFileDelete();
     std::vector<String> listSdFiles();
+
+    String encodeLogoPixelsRGB888(const uint16_t* logo, int size);
     String generateHtmlPage();
 };

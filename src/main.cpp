@@ -10,26 +10,18 @@ ServoCIEData servoCIEData;
 
 SPIClass hspi(HSPI);
 const SPISettings SENSOR_SPI_SETTINGS = SPISettings(800000, MSBFIRST, SPI_MODE0);
+
 SDManager sd(hspi, HSPI_CS); // Pass your CS pin here
 
 WifiApServer WiFiserver("LundaLoggern", "neonatal");
 
-
 void setup() {
-
-  delay(3000); // Wait for 3 seconds before starting setup
   hostCom.begin(115200); // Initialize Serial for debugging
   // servoCom.begin(115200); // Assuming Serial2 is used for communication with the ventilator
   hostCom.println("LundaLogger setup started");
 
   servoCIEData.begin();
-
-  hostCom.println("LundaLogger setup completed");
-  // Additional setup code can go here
-  // For example, initializing the display, WiFi, or other peripherals
  
-
-  
   hspi.begin(HSPI_SCLK, HSPI_MISO, HSPI_MOSI, HSPI_CS); // SCK, MISO, MOSI, CS
   // Attempt to initialize SD card and update internal status
   bool initSuccess = sd.begin();
@@ -77,19 +69,6 @@ void setup() {
   hostCom.print("Access Point IP: ");
   hostCom.println(WiFiserver.getApIpAddress());
 
-
- delay(1000); // Delay to allow the display to show the message
-
-  // Serial.print("IP address: ");  
-  // Serial.println(WiFi.localIP());
-  // Initialize WebServer or WebSocketsServer if needed
-  // WebServer server(80); // Initialize web server on port 80
-  // WebSocketsServer webSocket = WebSocketsServer(81); // Initialize WebSocket server
-  // server.begin(); // Start the web server
-  // webSocket.begin(); // Start the WebSocket server
-  // Serial.println("Web server and WebSocket server started.");
-  // Additional initialization code can be added here
-
 }
 
 void loop() {
@@ -98,8 +77,8 @@ void loop() {
   if (!initLoop) {
     initLoop = true; // Set the flag to true to indicate loop has been initialized
     hostCom.println("LundaLogger loop initialized");
-    renderer.drawSwatch(100, 10, TFT_DARKERBLUE, "INIT");
-    delay(500); // Delay to allow the display to show the message
+    // renderer.drawSwatch(100, 10, TFT_DARKERBLUE, "INIT");
+    // delay(500); // Delay to allow the display to show the message
     tft.fillScreen(TFT_LOGOBACKGROUND); // Clear the display with blue color
     tft.setTextSize(1); // Set text size for the next line
     renderer.pushFullImage(220, 40, 100, 100, lundaLogo);

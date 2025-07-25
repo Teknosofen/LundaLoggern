@@ -2,6 +2,7 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #include <SD.h>
+#include "main.hpp"
 
 WebServer server(80);
 
@@ -85,21 +86,34 @@ void WifiApServer::handleFileManager() {
 
 void WifiApServer::handleFileDownload() {
     for (int i = 0; i < server.args(); ++i) {
-        String f = server.arg(i);
+        String f = "/" + server.arg(i);  // Ensure leading slash
         if (SD.exists(f.c_str())) {
             File file = SD.open(f.c_str(), FILE_READ);
+            
+            // Extract filename (strip path if necessary)
+            String path = file.name();
+            String fname = path.substring(path.lastIndexOf('/') + 1);
+            
+            // Set headers to trigger a download and preserve filename
+            server.sendHeader("Content-Disposition", "attachment; filename=\"" + fname + "\"");
+            
+            // Stream file to client
             server.streamFile(file, "application/octet-stream");
             file.close();
             return;
         }
     }
+
+    // If no file was found
     server.send(404, "text/plain", "No file found");
 }
+
 
 void WifiApServer::handleFileDelete() {
     bool anyDeleted = false;
     for (int i = 0; i < server.args(); ++i) {
-        String f = server.arg(i);
+        String f = "/" + server.arg(i);  // 👈 Add leading slash
+        hostCom.println("Deleting file: " + f);
         if (SD.exists(f.c_str())) {
             SD.remove(f.c_str());
             anyDeleted = true;
@@ -119,32 +133,98 @@ std::vector<String> WifiApServer::listSdFiles() {
     return list;
 }
 
+String WifiApServer::encodeLogoPixelsRGB888(const uint16_t* logo, int size) {
+    String result = "[";
+    for (int i = 0; i < size; ++i) {
+        uint16_t pixel = logo[i];
+
+        // Convert RGB565 to RGB888
+        uint8_t r = ((pixel >> 11) & 0x1F) << 3;
+        uint8_t g = ((pixel >> 5) & 0x3F) << 2;
+        uint8_t b = (pixel & 0x1F) << 3;
+
+        result += "[" + String(r) + "," + String(g) + "," + String(b) + ",255]";
+        if (i != size - 1) result += ",";
+    }
+    result += "]";
+    return result;
+}
+
 String WifiApServer::generateHtmlPage() {
-    String html = "<!DOCTYPE html><html><head><title>ESP32 Status</title></head><body>";
+    String html = "<!DOCTYPE html><html><head><title>LundaLogger Status</title></head><body>";
     html += "<h2>" + _text + "</h2>";
 
+    // Display system status
     html += "<ul>";
     for (int i = 0; i < 4; ++i) {
         html += "<li>" + _labels[i] + ": " + String(_values[i]) + "</li>";
     }
     html += "</ul>";
 
+    // Logo canvas
     html += "<canvas id='logoCanvas' width='" + String(_logoWidth) + "' height='" + String(_logoHeight) + "'></canvas>";
-    html += "<script>";
-    html += "let canvas = document.getElementById('logoCanvas');";
-    html += "let ctx = canvas.getContext('2d');";
-    html += "let imageData = ctx.createImageData(" + String(_logoWidth) + ", " + String(_logoHeight) + ");";
-    html += "let data = imageData.data;";
+    html += "<script>\n";
+    html += "try {\n";
+    html += "let canvas = document.getElementById('logoCanvas');\n";
+    html += "let ctx = canvas.getContext('2d');\n";
+    html += "let imageData = ctx.createImageData(" + String(_logoWidth) + ", " + String(_logoHeight) + ");\n";
+    html += "let data = imageData.data;\n";
 
-    html += "// TODO: Fill 'data' with RGB888 pixel values derived from your lundaLogo[] array";
+    // Embed pixel data using helper
+    html += "let pixels = " + encodeLogoPixelsRGB888(lundaLogo, _logoWidth * _logoHeight) + ";\n";
 
-    html += "ctx.putImageData(imageData, 0, 0);</script>";
+    // Fill canvas pixel buffer
+    html += "for (let i = 0; i < pixels.length; ++i) {\n";
+    html += "  let p = pixels[i];\n";
+    html += "  data[i * 4] = p[0];     // R\n";
+    html += "  data[i * 4 + 1] = p[1]; // G\n";
+    html += "  data[i * 4 + 2] = p[2]; // B\n";
+    html += "  data[i * 4 + 3] = p[3]; // A\n";
+    html += "}\n";
+    html += "ctx.putImageData(imageData, 0, 0);\n";
+    html += "} catch (e) {\n";
+    html += "  console.error('Canvas error:', e);\n";
+    html += "  document.body.innerHTML += '<p style=\"color:red;\">Logo failed to load</p>';\n";
+    html += "}\n";
+    html += "</script>\n";
 
+    // File manager button
     if (_downloadEnabled || _deleteEnabled) {
-        html += "<br><form method='GET' action='/files'>";
-        html += "<button type='submit'>Open File Manager</button></form>";
+        html += "<br><form method='GET' action='/files'>\n";
+        html += "<button type='submit'>Open File Manager</button>\n";
+        html += "</form>\n";
     }
 
     html += "</body></html>";
     return html;
 }
+
+// String WifiApServer::generateHtmlPage() {
+//     String html = "<!DOCTYPE html><html><head><title>LundaLogger Status</title></head><body>";
+//     html += "<h2>" + _text + "</h2>";
+
+//     html += "<ul>";
+//     for (int i = 0; i < 4; ++i) {
+//         html += "<li>" + _labels[i] + ": " + String(_values[i]) + "</li>";
+//     }
+//     html += "</ul>";
+
+//     html += "<canvas id='logoCanvas' width='" + String(_logoWidth) + "' height='" + String(_logoHeight) + "'></canvas>";
+//     html += "<script>";
+//     html += "let canvas = document.getElementById('logoCanvas');";
+//     html += "let ctx = canvas.getContext('2d');";
+//     html += "let imageData = ctx.createImageData(" + String(_logoWidth) + ", " + String(_logoHeight) + ");";
+//     html += "let data = imageData.data;";
+
+//     html += "// TODO: Fill 'data' with RGB888 pixel values derived from your lundaLogo[] array";
+
+//     html += "ctx.putImageData(imageData, 0, 0);</script>";
+
+//     if (_downloadEnabled || _deleteEnabled) {
+//         html += "<br><form method='GET' action='/files'>";
+//         html += "<button type='submit'>Open File Manager</button></form>";
+//     }
+
+//     html += "</body></html>";
+//     return html;
+// }
