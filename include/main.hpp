@@ -39,6 +39,7 @@
 #include <SPI.h>
 #include <SD.h>
 #include <WiFi.h>
+#include <SPIFFS.h>
 #include "Lundalogger_logo_100x100_24bit.h"
 #include "ImageRenderer.hpp"
 #include <SPI.h>

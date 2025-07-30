@@ -1,6 +1,12 @@
 #include <Arduino.h>
 #include "main.hpp"
 
+// ---------------------------------
+// logo BMP file stored in SPIFFS
+// to send to device run:
+// pio run --target uploadfs
+// ---------------------------------
+
 
 TFT_eSPI tft = TFT_eSPI(); // Initialize the display
 TFT_eSprite spriteLeft = TFT_eSprite(&tft); // Create sprite object left
@@ -13,7 +19,11 @@ const SPISettings SENSOR_SPI_SETTINGS = SPISettings(800000, MSBFIRST, SPI_MODE0)
 
 SDManager sd(hspi, HSPI_CS); // Pass your CS pin here
 
+
+
+
 WifiApServer WiFiserver("LundaLoggern", "neonatal");
+
 
 void setup() {
   hostCom.begin(115200); // Initialize Serial for debugging
@@ -22,6 +32,14 @@ void setup() {
 
   servoCIEData.begin();
  
+  delay(1000); // Wait for Serial to initialize
+
+  if (!SPIFFS.begin(false)) {
+      Serial.println("SPIFFS mount failed");
+   } else {
+      Serial.println("SPIFFS mounted successfully");
+  }
+
   hspi.begin(HSPI_SCLK, HSPI_MISO, HSPI_MOSI, HSPI_CS); // SCK, MISO, MOSI, CS
   // Attempt to initialize SD card and update internal status
   bool initSuccess = sd.begin();
@@ -55,7 +73,7 @@ void setup() {
 
   renderer.pushFullImage(220, 40, 100, 100, lundaLogo);
  
-  WiFiserver.setLogoData(lundaLogo, 100, 100);
+  // WiFiserver.setLogoData(lundaLogo, 100, 100);
   WiFiserver.setTextAndValues("LundaLogger", 23.5, 67.8, 1013.2, 3.7);
   WiFiserver.setLabel(0, "Temp");
   WiFiserver.setLabel(1, "Humidity");
@@ -68,6 +86,16 @@ void setup() {
   WiFiserver.begin();
   hostCom.print("Access Point IP: ");
   hostCom.println(WiFiserver.getApIpAddress());
+
+  // List files in SPIFFS for debugging
+  Serial.println("Listing files in SPIFFS:");
+  File root = SPIFFS.open("/");
+  File file = root.openNextFile();
+
+  while (file) {
+      Serial.println(file.name());
+      file = root.openNextFile();
+  }
 
 }
 
