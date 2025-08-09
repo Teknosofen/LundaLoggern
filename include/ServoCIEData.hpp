@@ -3,16 +3,69 @@
 
 #include <Arduino.h>
 #include "main.hpp"
+// new 2025-08-04
+#include <FS.h>
+#include <SPIFFS.h>
+
+// new 2025-08-04
+struct Metric {
+    String channel;
+    String label;
+    String unit;
+    float scaleFactor;
+    float offset;
+};
+
+struct Setting {
+    String channel;
+    String label;
+    String unit;
+    float scaleFactor;
+    float offset;
+};
+
 
 class ServoCIEData {
 public:
     ServoCIEData();
-    void begin();
+    bool begin();
     void parseCIEData(char NextSCI_chr);
     void getCIEResponse();
     void CIE_setup();
 
+    static const int MaxMetrics = 20;
+    static const int MaxSettings = 20;
+
+    Metric metrics[MaxMetrics];
+    int metricCount = 0;
+    bool metricConfigLoaded = false;
+
+    Setting settings[MaxSettings];
+    int settingCount = 0;
+    bool settingConfigLoaded = false;
+
+    // bool begin();  // Initializes SPIFFS
+
+    // Metric config
+    bool loadMetricFromSD(const char* path);
+    bool loadMetricFromSPIFFS(const char* path);
+    bool syncMetricSDToSPIFFS(const char* path);
+    bool syncMetricSPIFFSToSD(const char* path);
+    void printAllMetrics();
+
+    // Setting config
+    bool loadSettingFromSD(const char* path);
+    bool loadSettingFromSPIFFS(const char* path);
+    bool syncSettingSDToSPIFFS(const char* path);
+    bool syncSettingSPIFFSToSD(const char* path);
+    void printAllSettings();
+
+
 private:
+
+    bool parseMetricLine(const String& line, Metric& m);
+    bool parseSettingLine(const String& line, Setting& s);
+
     enum RunModeType {
         Awaiting_Info,
         End_Flag_Found,
@@ -65,8 +118,9 @@ private:
     #define NumMetrics 15 // number of metrics collected from SCI
     int16_t MetricUnscaled[NumMetrics]; // raw data from CIE, CIE obviously sends negative values where they should be posistiie
     float MetricScaled[NumMetrics]; // scaled metrics
-    float MetricOffset[NumMetrics+1] =       {0.0,     0.0,      0.0,      0.0,     0.0,      0.0,     0.0,      0.0,     0.0,     200.0,  200.0,   0.0,  200.0,   200.0,   0.0};
+    float MetricOffset[NumMetrics]   =       {0.0,     0.0,      0.0,      0.0,     0.0,      0.0,     0.0,      0.0,     0.0,     200.0,  200.0,   0.0,  200.0,   200.0,   0.0};
     float MetricScaleFactors[NumMetrics+1] = {0.1,     0.1,      1.0,      0.1,     0.2,      0.2,     0.01,     0.01,    0.1,     0.1,    0.1,     0.01, 0.1,     0.1,     0.0001};
+    String MetricChannels[NumMetrics]      = {"113", "114", "117", "100", "101", "102", "103", "104", "109", "108", "107", "122", "105", "106", "128"};
     //             channel no:                #113      #114     #117      #100     #101      #102     #103      #104     #109    #108     #107     #122  #105     ¤106     #128
     String MetricLabels[NumMetrics+1] =      {"VtCO2", "FetCO2", "MVCO2",  "RR",    "VtInsp", "VtExp", "MVinsp", "MVExp", "FiO2", "PEEP",  "EIP",   "IE", "PPeak", "Pmean", "Ti/Ttot"};
     String MetricUnits[NumMetrics+1] =       {"ml",     "%",     "ml/min", "1/min", "mL",     "mL",    "L/min",  "L/min", "%",    "cmH2O", "cmH2O", "-",  "cmH2O", "chH2O", "-"};
@@ -147,6 +201,8 @@ private:
     } servoSettingList;
     servoSettingList servoSettings;
     servoSettingList* myServoSettingListPtr = &servoSettings;
+
+
 
     // Add other private members as needed
     void Send_SERVO_CMD(String InStr);

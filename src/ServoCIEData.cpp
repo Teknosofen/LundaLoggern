@@ -6,7 +6,7 @@ ServoCIEData::ServoCIEData()
     // Initialize other members if needed
 }
 
-void ServoCIEData::begin() {
+bool ServoCIEData::begin() {
     CIE_setup();
 }
 
@@ -64,20 +64,20 @@ void ServoCIEData::parseCIEData(char NextSCI_chr) {
                 MetricScaled[MetricNo] = MetricUnscaled[MetricNo] * MetricScaleFactors[MetricNo] - MetricOffset[MetricNo];
             } else if (ByteCount == 0 && NextSCI_chr == EndFlag) {
                 int k = 0;
-                ventO2BreathData.cieVtCO2 = MetricScaled[k++];
-                ventO2BreathData.cieFetCO2 = MetricScaled[k++];
-                ventO2BreathData.cieMVCO2 = MetricScaled[k++];
-                ventO2BreathData.cieRR = MetricScaled[k++];
-                ventO2BreathData.cieVtInsp = MetricScaled[k++];
-                ventO2BreathData.cieVtExp = MetricScaled[k++];
-                ventO2BreathData.cieMVinsp = MetricScaled[k++];
-                ventO2BreathData.cieMVExp = MetricScaled[k++];
-                ventO2BreathData.cieFiO2 = MetricScaled[k++];
-                ventO2BreathData.ciePEEP = MetricScaled[k++];
-                ventO2BreathData.ciePplat = MetricScaled[k++];
-                ventO2BreathData.cieIE = MetricScaled[k++];
-                ventO2BreathData.ciePpeak = MetricScaled[k++];
-                ventO2BreathData.Pmean = MetricScaled[k++];
+                ventO2BreathData.cieVtCO2   = MetricScaled[k++];
+                ventO2BreathData.cieFetCO2  = MetricScaled[k++];
+                ventO2BreathData.cieMVCO2   = MetricScaled[k++];
+                ventO2BreathData.cieRR      = MetricScaled[k++];
+                ventO2BreathData.cieVtInsp  = MetricScaled[k++];
+                ventO2BreathData.cieVtExp   = MetricScaled[k++];
+                ventO2BreathData.cieMVinsp  = MetricScaled[k++];
+                ventO2BreathData.cieMVExp   = MetricScaled[k++];
+                ventO2BreathData.cieFiO2    = MetricScaled[k++];
+                ventO2BreathData.ciePEEP    = MetricScaled[k++];
+                ventO2BreathData.ciePplat   = MetricScaled[k++];
+                ventO2BreathData.cieIE      = MetricScaled[k++];
+                ventO2BreathData.ciePpeak   = MetricScaled[k++];
+                ventO2BreathData.Pmean      = MetricScaled[k++];
                 ventO2BreathData.cieTi2Ttot = MetricScaled[k];
 
                 if (ventO2BreathData.cieIE < (cieDataInvalid - 1) * 0.01) {
@@ -106,16 +106,16 @@ void ServoCIEData::parseCIEData(char NextSCI_chr) {
                 settingsScaled[settingsNo] = settingsUnscaled[settingsNo] * settingsScaleFactors[settingsNo] - settingsOffset[settingsNo];
             } else if (ByteCount == 0 && NextSCI_chr == EndFlag) {
                 int k = 0;
-                servoSettings.setRespRate = settingsScaled[k++];
-                servoSettings.setMinuteVol = settingsScaled[k++];
-                servoSettings.setPeep = settingsScaled[k++];
-                servoSettings.setFiO2 = settingsScaled[k++];
-                servoSettings.setInspPress = settingsScaled[k++];
-                servoSettings.setVt = settingsScaled[k++];
-                servoSettings.setVentMode = settingsScaled[k++];
-                servoSettings.setPatRange = settingsScaled[k++];
+                servoSettings.setRespRate   = settingsScaled[k++];
+                servoSettings.setMinuteVol  = settingsScaled[k++];
+                servoSettings.setPeep       = settingsScaled[k++];
+                servoSettings.setFiO2       = settingsScaled[k++];
+                servoSettings.setInspPress  = settingsScaled[k++];
+                servoSettings.setVt         = settingsScaled[k++];
+                servoSettings.setVentMode   = settingsScaled[k++];
+                servoSettings.setPatRange   = settingsScaled[k++];
                 servoSettings.setComplianceCompensationOn = settingsScaled[k++];
-                servoSettings.setIERatio = settingsScaled[k];
+                servoSettings.setIERatio    = settingsScaled[k];
                 RunMode = End_Flag_Found;
             } else {
                 settingsNo++;
@@ -334,3 +334,271 @@ void ServoCIEData::CIE_setup() {
     getCIEResponse();
 }
 
+
+// bool ServoCIEData::begin() {
+//     if (!SPIFFS.begin(true)) {
+//         Serial.println("⚠️ SPIFFS Mount Failed");
+//         return false;
+//     }
+//     return true;
+// }
+
+// -------------------- Metric Config --------------------
+
+bool ServoCIEData::loadMetricFromSD(const char* path) {
+    metricCount = 0;
+    File file = SD.open(path);
+    if (!file || file.isDirectory()) {
+        Serial.println("❌ SD metric file not found");
+        metricConfigLoaded = false;
+        return false;
+    }
+
+    Serial.println("✅ Loaded metric config from SD");
+    while (file.available()) {
+        String line = file.readStringUntil('\n');
+        line.trim();
+        if (line.length() == 0 || line.startsWith("#")) continue;
+
+        Metric m;
+        if (parseMetricLine(line, m) && metricCount < MaxMetrics) {
+            metrics[metricCount++] = m;
+        }
+    }
+
+    file.close();
+    metricConfigLoaded = true;
+    return true;
+}
+
+bool ServoCIEData::loadMetricFromSPIFFS(const char* path) {
+    metricCount = 0;
+    File file = SPIFFS.open(path);
+    if (!file || file.isDirectory()) {
+        Serial.println("❌ SPIFFS metric file not found");
+        metricConfigLoaded = false;
+        return false;
+    }
+
+    Serial.println("✅ Loaded metric config from SPIFFS");
+    while (file.available()) {
+        String line = file.readStringUntil('\n');
+        line.trim();
+        if (line.length() == 0 || line.startsWith("#")) continue;
+
+        Metric m;
+        if (parseMetricLine(line, m) && metricCount < MaxMetrics) {
+            metrics[metricCount++] = m;
+        }
+    }
+
+    file.close();
+    metricConfigLoaded = true;
+    return true;
+}
+
+bool ServoCIEData::syncMetricSDToSPIFFS(const char* path) {
+    File inFile = SD.open(path);
+    if (!inFile || inFile.isDirectory()) {
+        Serial.println("❌ SD metric file not found for syncing");
+        return false;
+    }
+
+    File outFile = SPIFFS.open(path, FILE_WRITE);
+    if (!outFile) {
+        Serial.println("❌ Failed to open SPIFFS metric file for writing");
+        inFile.close();
+        return false;
+    }
+
+    while (inFile.available()) {
+        outFile.write(inFile.read());
+    }
+
+    inFile.close();
+    outFile.close();
+    Serial.println("🔁 Synced SD → SPIFFS (metrics)");
+    return true;
+}
+
+bool ServoCIEData::syncMetricSPIFFSToSD(const char* path) {
+    File inFile = SPIFFS.open(path);
+    if (!inFile || inFile.isDirectory()) {
+        Serial.println("❌ SPIFFS metric file not found for syncing");
+        return false;
+    }
+
+    File outFile = SD.open(path, FILE_WRITE);
+    if (!outFile) {
+        Serial.println("❌ Failed to open SD metric file for writing");
+        inFile.close();
+        return false;
+    }
+
+    while (inFile.available()) {
+        outFile.write(inFile.read());
+    }
+
+    inFile.close();
+    outFile.close();
+    Serial.println("🔁 Synced SPIFFS → SD (metrics)");
+    return true;
+}
+
+void ServoCIEData::printAllMetrics() {
+    for (int i = 0; i < metricCount; i++) {
+        Serial.printf("📡 %s:\t%s [%s]\tScale: %.4f\tOffset: %.2f\n",
+                      metrics[i].channel.c_str(),
+                      metrics[i].label.c_str(),
+                      metrics[i].unit.c_str(),
+                      metrics[i].scaleFactor,
+                      metrics[i].offset);
+    }
+}
+
+bool ServoCIEData::parseMetricLine(const String& line, Metric& m) {
+    int tab1 = line.indexOf('\t');
+    int tab2 = line.indexOf('\t', tab1 + 1);
+    int tab3 = line.indexOf('\t', tab2 + 1);
+    int tab4 = line.indexOf('\t', tab3 + 1);
+
+    if (tab1 == -1 || tab2 == -1 || tab3 == -1 || tab4 == -1) return false;
+
+    m.channel     = line.substring(0, tab1);
+    m.label       = line.substring(tab1 + 1, tab2);
+    m.unit        = line.substring(tab2 + 1, tab3);
+    m.scaleFactor = line.substring(tab3 + 1, tab4).toFloat();
+    m.offset      = line.substring(tab4 + 1).toFloat();
+
+    return true;
+}
+
+// -------------------- Setting Config --------------------
+
+bool ServoCIEData::loadSettingFromSD(const char* path) {
+    settingCount = 0;
+    File file = SD.open(path);
+    if (!file || file.isDirectory()) {
+        Serial.println("❌ SD setting file not found");
+        settingConfigLoaded = false;
+        return false;
+    }
+
+    Serial.println("✅ Loaded settings from SD");
+    while (file.available()) {
+        String line = file.readStringUntil('\n');
+        line.trim();
+        if (line.length() == 0 || line.startsWith("#")) continue;
+
+        Setting s;
+        if (parseSettingLine(line, s) && settingCount < MaxSettings) {
+            settings[settingCount++] = s;
+        }
+    }
+
+    file.close();
+    settingConfigLoaded = true;
+    return true;
+}
+
+bool ServoCIEData::loadSettingFromSPIFFS(const char* path) {
+    settingCount = 0;
+    File file = SPIFFS.open(path);
+    if (!file || file.isDirectory()) {
+        Serial.println("❌ SPIFFS setting file not found");
+        settingConfigLoaded = false;
+        return false;
+    }
+
+    Serial.println("✅ Loaded settings from SPIFFS");
+    while (file.available()) {
+        String line = file.readStringUntil('\n');
+        line.trim();
+        if (line.length() == 0 || line.startsWith("#")) continue;
+
+        Setting s;
+        if (parseSettingLine(line, s) && settingCount < MaxSettings) {
+            settings[settingCount++] = s;
+        }
+    }
+
+    file.close();
+    settingConfigLoaded = true;
+    return true;
+}
+
+bool ServoCIEData::syncSettingSDToSPIFFS(const char* path) {
+    File inFile = SD.open(path);
+    if (!inFile || inFile.isDirectory()) {
+        Serial.println("❌ SD setting file not found for syncing");
+        return false;
+    }
+
+    File outFile = SPIFFS.open(path, FILE_WRITE);
+    if (!outFile) {
+        Serial.println("❌ Failed to open SPIFFS setting file for writing");
+        inFile.close();
+        return false;
+    }
+
+    while (inFile.available()) {
+        outFile.write(inFile.read());
+    }
+
+    inFile.close();
+    outFile.close();
+    Serial.println("🔁 Synced SD → SPIFFS (settings)");
+    return true;
+}
+
+bool ServoCIEData::syncSettingSPIFFSToSD(const char* path) {
+    File inFile = SPIFFS.open(path);
+    if (!inFile || inFile.isDirectory()) {
+        Serial.println("❌ SPIFFS setting file not found for syncing");
+        return false;
+    }
+
+    File outFile = SD.open(path, FILE_WRITE);
+    if (!outFile) {
+        Serial.println("❌ Failed to open SD setting file for writing");
+        inFile.close();
+        return false;
+    }
+
+    while (inFile.available()) {
+        outFile.write(inFile.read());
+    }
+
+    inFile.close();
+    outFile.close();
+    Serial.println("🔁 Synced SPIFFS → SD (settings)");
+    return true;
+}
+
+void ServoCIEData::printAllSettings() {
+    for (int i = 0; i < settingCount; i++) {
+        Serial.printf("🛠 %s:\t%s [%s]\tScale: %.4f\tOffset: %.2f\n",
+                      settings[i].channel.c_str(),
+                      settings[i].label.c_str(),
+                      settings[i].unit.c_str(),
+                      settings[i].scaleFactor,
+                      settings[i].offset);
+    }
+}
+
+bool ServoCIEData::parseSettingLine(const String& line, Setting& s) {
+    int tab1 = line.indexOf('\t');
+    int tab2 = line.indexOf('\t', tab1 + 1);
+    int tab3 = line.indexOf('\t', tab2 + 1);
+    int tab4 = line.indexOf('\t', tab3 + 1);
+
+    if (tab1 == -1 || tab2 == -1 || tab3 == -1 || tab4 == -1) return false;
+
+    s.channel     = line.substring(0, tab1);
+    s.label       = line.substring(tab1 + 1, tab2);
+    s.unit        = line.substring(tab2 + 1, tab3);
+    s.scaleFactor = line.substring(tab3 + 1, tab4).toFloat();
+    s.offset      = line.substring(tab4 + 1).toFloat();
+
+    return true;
+}

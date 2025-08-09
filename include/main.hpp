@@ -47,6 +47,8 @@
 #include "WifiApServer.hpp"
 
 #include "ServoCIEData.hpp"
+// const char* MetricConfigPath = "/MetricConfig.txt";
+// const char* SettingConfigPath = "/SettingConfig.txt";
 
 
 #endif // MAIN_HPP

@@ -19,11 +19,10 @@ const SPISettings SENSOR_SPI_SETTINGS = SPISettings(800000, MSBFIRST, SPI_MODE0)
 
 SDManager sd(hspi, HSPI_CS); // Pass your CS pin here
 
-
-
-
 WifiApServer WiFiserver("LundaLoggern", "neonatal");
 
+const char* MetricConfigPath = "/MetricConfig.txt";
+const char* SettingConfigPath = "/SettingConfig.txt";
 
 void setup() {
   hostCom.begin(115200); // Initialize Serial for debugging
@@ -60,7 +59,52 @@ void setup() {
     Serial.println("❌ SD card is not detected or failed to mount.");
   }
 
+  // config file(s) management
+  bool metricConfigLoaded = false;
+  bool settingConfigLoaded = false;
 
+  if (SD.begin()) {
+      if (servoCIEData.loadMetricFromSD(MetricConfigPath)) {
+          Serial.println("✔ MetricConfig loaded from SD");
+          servoCIEData.syncMetricSDToSPIFFS(MetricConfigPath);
+          metricConfigLoaded = true;
+      } else {
+          Serial.println("⚠ MetricConfig SD file missing, trying SPIFFS...");
+          if (servoCIEData.loadMetricFromSPIFFS(MetricConfigPath)) {
+              Serial.println("✔ MetricConfig loaded from SPIFFS");
+              servoCIEData.syncMetricSPIFFSToSD(MetricConfigPath);
+              metricConfigLoaded = true;
+          }
+      }
+
+      if (servoCIEData.loadSettingFromSD(SettingConfigPath)) {
+          Serial.println("✔ SettingConfig loaded from SD");
+          servoCIEData.syncSettingSDToSPIFFS(SettingConfigPath);
+          settingConfigLoaded = true;
+      } else {
+          Serial.println("⚠ SettingConfig SD file missing, trying SPIFFS...");
+          if (servoCIEData.loadSettingFromSPIFFS(SettingConfigPath)) {
+              Serial.println("✔ SettingConfig loaded from SPIFFS");
+              servoCIEData.syncSettingSPIFFSToSD(SettingConfigPath);
+              settingConfigLoaded = true;
+          }
+      }
+  } else {
+      Serial.println("⚠ SD mount failed, using SPIFFS only...");
+      if (servoCIEData.begin()) {
+          metricConfigLoaded = servoCIEData.loadMetricFromSPIFFS(MetricConfigPath);
+          settingConfigLoaded = servoCIEData.loadSettingFromSPIFFS(SettingConfigPath);
+      }
+  }
+
+  if (metricConfigLoaded || settingConfigLoaded) {
+      servoCIEData.printAllMetrics();  // You can expand this to print specific setting values too
+  } else {
+      Serial.println("❌ No configs loaded.");
+  }
+
+
+  // Display setup
   tft.init();
   tft.setRotation(1); // Set display orientation
   

@@ -1,0 +1,15 @@
+113	VtCO2	ml	0.1	0.0
+114	FetCO2	%	0.1	0.0
+117	MVCO2	ml/min	1.0	0.0
+100	RR	1/min	0.1	0.0
+101	VtInsp	mL	0.2	0.0
+102	VtExp	mL	0.2	0.0
+103	MVinsp	L/min	0.01	0.0
+104	MVExp	L/min	0.01	0.0
+109	FiO2	%	0.1	0.0
+108	PEEP	cmH2O	0.1	200.0
+107	EIP	cmH2O	0.1	200.0
+122	IE	-	0.01	0.0
+105	PPeak	cmH2O	0.1	200.0
+106	Pmean	chH2O	0.1	200.0
+128	Ti/Ttot	-	0.0001	0.0
