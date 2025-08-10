@@ -8,15 +8,23 @@
 #include <SPIFFS.h>
 
 // new 2025-08-04
-struct Metric {
-    String channel;
-    String label;
-    String unit;
-    float scaleFactor;
-    float offset;
-};
+// struct Metric {
+//     String channel;
+//     String label;
+//     String unit;
+//     float scaleFactor;
+//     float offset;
+// };
 
-struct Setting {
+// struct Setting {
+//     String channel;
+//     String label;
+//     String unit;
+//     float scaleFactor;
+//     float offset;
+// };
+
+struct Configs {
     String channel;
     String label;
     String unit;
@@ -35,16 +43,17 @@ public:
     void Send_SERVO_CMD(const char* InStr);
     char CRC_calc(const char* localstring);
     void ScaleMetrics();
+    String concatConfigChannels(const Configs configs[], int numConfigs);
 
 
     static const int MaxMetrics = 20;
     static const int MaxSettings = 20;
 
-    Metric metrics[MaxMetrics];
+    Configs metrics[MaxMetrics];
     int metricCount = 0;
     bool metricConfigLoaded = false;
 
-    Setting settings[MaxSettings];
+    Configs settings[MaxSettings];
     int settingCount = 0;
     bool settingConfigLoaded = false;
 
@@ -66,8 +75,8 @@ public:
 
 
 private:
-    bool parseMetricLine(const String& line, Metric& m);
-    bool parseSettingLine(const String& line, Setting& s);
+    bool parseMetricLine(const String& line, Configs& m);
+    bool parseSettingLine(const String& line, Configs& s);
 
     enum RunModeType {
         Awaiting_Info,

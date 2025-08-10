@@ -378,12 +378,12 @@ void ServoCIEData::CIE_setup() {
     strcpy(CMD_RCTY, "RCTY");
 
     strcpy(CMD_SDADB, "SDADB");
-    strcpy(PAYLOAD_SDADB, "113114117100102101103104109108107122105106128");
+    // strcpy(PAYLOAD_SDADB, "113114117100102101103104109108107122105106128");
     strcat(CMD_SDADB, PAYLOAD_SDADB);  // Append PAYLOAD_SDADB to CMD_SDADB
 
-    strcpy(PAYLOAD_SDADS, "400405408414406420410409437419");
+    // strcpy(PAYLOAD_SDADS, "400405408414406420410409437419");
     strcpy(CMD_SDADS, "SDADS");
-    strcat(CMD_SDADS, PAYLOAD_SDADB);  // Append PAYLOAD_SDADB to CMD_SDADB
+    strcat(CMD_SDADS, concatConfigChannels(settings, settingCount).c_str());  // Append PAYLOAD_SDADB to CMD_SDADB
 
     strcpy(PAYLOAD_SDADC, "000004001");
     strcpy(CMD_SDADC, "SDADC");
@@ -433,6 +433,15 @@ void ServoCIEData::CIE_setup() {
     getCIEResponse();
     hostCom.print("\nCIE setup complete");
 }
+// -------------------- Config helpers --------------------
+
+String ServoCIEData::concatConfigChannels(const Configs configs[], int size) {
+    String result = "";
+    for (int i = 0; i < size; ++i) {
+        result += configs[i].channel;
+    }
+    return result;
+}
 
 
 // -------------------- Metric Config --------------------
@@ -452,7 +461,7 @@ bool ServoCIEData::loadMetricFromSD(const char* path) {
         line.trim();
         if (line.length() == 0 || line.startsWith("#")) continue;
 
-        Metric m;
+        Configs m;
         if (parseMetricLine(line, m) && metricCount < MaxMetrics) {
             metrics[metricCount++] = m;
         }
@@ -478,7 +487,7 @@ bool ServoCIEData::loadMetricFromSPIFFS(const char* path) {
         line.trim();
         if (line.length() == 0 || line.startsWith("#")) continue;
 
-        Metric m;
+        Configs m;
         if (parseMetricLine(line, m) && metricCount < MaxMetrics) {
             metrics[metricCount++] = m;
         }
@@ -549,7 +558,7 @@ void ServoCIEData::printAllMetrics() {
     hostCom.printf("Total num metrics: %d\n", metricCount);
 }
 
-bool ServoCIEData::parseMetricLine(const String& line, Metric& m) {
+bool ServoCIEData::parseMetricLine(const String& line, Configs& m) {
     int tab1 = line.indexOf('\t');
     int tab2 = line.indexOf('\t', tab1 + 1);
     int tab3 = line.indexOf('\t', tab2 + 1);
@@ -583,7 +592,7 @@ bool ServoCIEData::loadSettingFromSD(const char* path) {
         line.trim();
         if (line.length() == 0 || line.startsWith("#")) continue;
 
-        Setting s;
+        Configs s;
         if (parseSettingLine(line, s) && settingCount < MaxSettings) {
             settings[settingCount++] = s;
         }
@@ -609,7 +618,7 @@ bool ServoCIEData::loadSettingFromSPIFFS(const char* path) {
         line.trim();
         if (line.length() == 0 || line.startsWith("#")) continue;
 
-        Setting s;
+        Configs s;
         if (parseSettingLine(line, s) && settingCount < MaxSettings) {
             settings[settingCount++] = s;
         }
@@ -670,7 +679,7 @@ bool ServoCIEData::syncSettingSPIFFSToSD(const char* path) {
 
 void ServoCIEData::printAllSettings() {
     for (int i = 0; i < settingCount; i++) {
-        Serial.printf("🛠 %s:\t%s [%s]\tScale: %.4f\tOffset: %.2f\n",
+        Serial.printf("%s:\t%s [%s]\tScale: %.4f\tOffset: %.2f\n",
                       settings[i].channel.c_str(),
                       settings[i].label.c_str(),
                       settings[i].unit.c_str(),
@@ -680,7 +689,7 @@ void ServoCIEData::printAllSettings() {
     hostCom.printf("Total num settings: %d\n", settingCount);
 }
 
-bool ServoCIEData::parseSettingLine(const String& line, Setting& s) {
+bool ServoCIEData::parseSettingLine(const String& line, Configs& s) {
     int tab1 = line.indexOf('\t');
     int tab2 = line.indexOf('\t', tab1 + 1);
     int tab3 = line.indexOf('\t', tab2 + 1);
