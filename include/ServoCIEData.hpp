@@ -44,7 +44,7 @@ public:
     char CRC_calc(const char* localstring);
     void ScaleMetrics();
     String concatConfigChannels(const Configs configs[], int numConfigs);
-
+    void initializeConfigs(const char* metricPath, const char* settingPath);
 
     static const int MaxMetrics = 20;
     static const int MaxSettings = 20;

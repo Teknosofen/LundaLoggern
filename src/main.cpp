@@ -36,15 +36,9 @@ void setup() {
 
   servoCom.begin(SERVO_BAUD, SERIAL_8E1, RXD2, TXD2); // RX = GPIO16, TX = GPIO17
 
-  servoCIEData.begin();
- 
   delay(2000); // Wait for Serial to initialize
 
-  if (!SPIFFS.begin(false)) {
-      Serial.println("SPIFFS mount failed");
-   } else {
-      Serial.println("SPIFFS mounted successfully");
-  }
+  
 
   hspi.begin(HSPI_SCLK, HSPI_MISO, HSPI_MOSI, HSPI_CS); // SCK, MISO, MOSI, CS
   // Attempt to initialize SD card and update internal status
@@ -66,56 +60,15 @@ void setup() {
     Serial.println("❌ SD card is not detected or failed to mount.");
   }
 
-  // config file(s) management
-  bool metricConfigLoaded = false;
-  bool settingConfigLoaded = false;
-
-  if (SD.begin()) {
-      if (servoCIEData.loadMetricFromSD(MetricConfigPath)) {
-          Serial.println("✔ MetricConfig loaded from SD");
-          servoCIEData.syncMetricSDToSPIFFS(MetricConfigPath);
-          metricConfigLoaded = true;
-      } else {
-          Serial.println("⚠ MetricConfig SD file missing, trying SPIFFS...");
-          if (servoCIEData.loadMetricFromSPIFFS(MetricConfigPath)) {
-              Serial.println("✔ MetricConfig loaded from SPIFFS");
-              servoCIEData.syncMetricSPIFFSToSD(MetricConfigPath);
-              metricConfigLoaded = true;
-          }
-      }
-
-      if (servoCIEData.loadSettingFromSD(SettingConfigPath)) {
-          Serial.println("✔ SettingConfig loaded from SD");
-          servoCIEData.syncSettingSDToSPIFFS(SettingConfigPath);
-          settingConfigLoaded = true;
-      } else {
-          Serial.println("⚠ SettingConfig SD file missing, trying SPIFFS...");
-          if (servoCIEData.loadSettingFromSPIFFS(SettingConfigPath)) {
-              Serial.println("✔ SettingConfig loaded from SPIFFS");
-              servoCIEData.syncSettingSPIFFSToSD(SettingConfigPath);
-              settingConfigLoaded = true;
-          }
-      }
-  } else {
-      Serial.println("⚠ SD mount failed, using SPIFFS only...");
-      if (servoCIEData.begin()) {
-          metricConfigLoaded = servoCIEData.loadMetricFromSPIFFS(MetricConfigPath);
-          settingConfigLoaded = servoCIEData.loadSettingFromSPIFFS(SettingConfigPath);
-      }
+  if (!SPIFFS.begin(false)) {
+      Serial.println("❌ SPIFFS mount failed");
+   } else {
+      Serial.println("✅ SPIFFS mounted successfully");
   }
-
-  if (metricConfigLoaded) {
-      servoCIEData.printAllMetrics();  // You can expand this to print specific setting values too
-  } else {
-      Serial.println("❌ No metric configs loaded.");
-  }
-
-  if (settingConfigLoaded) {
-      servoCIEData.printAllSettings();  // You can expand this to print specific setting values too
-  } else {
-      Serial.println("❌ No setting configs loaded.");
-  }
-
+  
+  servoCIEData.initializeConfigs(MetricConfigPath, SettingConfigPath);
+  servoCIEData.begin();
+ 
   // Display setup
   tft.init();
   tft.setRotation(1); // Set display orientation

@@ -319,58 +319,7 @@ void ServoCIEData::getCIEResponse() {
     hostCom.println(" no more CIE data available to receive");
 }
 
-// void ServoCIEData::CIE_setup() {
-//     servoCom.write(EOT);
-//      // hostCom.print("\nsending EOT ");
-//      getCIEResponse();
-//      // hostCom.print("\nsending ESC ");
-//      servoCom.write(ESC);
-//     getCIEResponse();
-//     // hostCom.print("\nsending RTIM ");
-//     Send_SERVO_CMD("RTIM");
-//     getCIEResponse();
-//     // hostCom.print("\nsending RCTY");
-//     Send_SERVO_CMD("RCTY");
-//     getCIEResponse();
-//     // hostCom.print("\nsending SDADB ");
-//     Send_SERVO_CMD("SDADB113114117100102101103104109108107122105106128");
-//     getCIEResponse();
-//     // hostCom.print("\nsending SDADS ");
-//     Send_SERVO_CMD("SDADS400405408414406420410409437419");
-//     getCIEResponse();
-//     // hostCom.print("\nsending SDADC ");
-//     Send_SERVO_CMD("SDADC000004001");
-//     getCIEResponse();
-//     // hostCom.print("\nsending RCCO102 ");
-//     Send_SERVO_CMD("RCCO102");
-//     getCIEResponse();
-//     // hostCom.print("\nsending RDAD ");
-//     Send_SERVO_CMD("RDAD");
-//     getCIEResponse();
-//     // hostCom.print("\nsending RADAB ");
 
-//     Send_SERVO_CMD("RADAB");
-//     delay(10);
-//     while (servoCom.available()) {
-//         inByte = servoCom.read();
-//         // hostCom.print("0");
-//         // hostCom.print(inByte, HEX);
-//         if (inByte == EOT) break;}
-//         // hostCom.print("\nSending RADAS ");
-//     Send_SERVO_CMD("RADAS");
-//     delay(10);
-//     while (servoCom.available()) {
-//         inByte = servoCom.read();
-//         // hostCom.print("0");
-//         // hostCom.print(inByte, HEX);
-//         if (inByte == EOT) break;
-//     }
-
-//     // Send_SERVO_CMD("RADC");
-//     hostCom.println(" CIE setup almost complete");
-//     getCIEResponse();
-//     hostCom.print("\nCIE setup complete");
-// }
 
 // 2025-08-09:
 void ServoCIEData::CIE_setup() {
@@ -379,7 +328,7 @@ void ServoCIEData::CIE_setup() {
 
     strcpy(CMD_SDADB, "SDADB");
     // strcpy(PAYLOAD_SDADB, "113114117100102101103104109108107122105106128");
-    strcat(CMD_SDADB, PAYLOAD_SDADB);  // Append PAYLOAD_SDADB to CMD_SDADB
+    strcat(CMD_SDADB, concatConfigChannels(metrics, metricCount).c_str());  // Append PAYLOAD_SDADB to CMD_SDADB
 
     // strcpy(PAYLOAD_SDADS, "400405408414406420410409437419");
     strcpy(CMD_SDADS, "SDADS");
@@ -387,7 +336,7 @@ void ServoCIEData::CIE_setup() {
 
     strcpy(PAYLOAD_SDADC, "000004001");
     strcpy(CMD_SDADC, "SDADC");
-    strcat(CMD_SDADC, PAYLOAD_SDADB);  // Append PAYLOAD_SDADB to CMD_SDADB
+    strcat(CMD_SDADC, PAYLOAD_SDADC);  // Append PAYLOAD_SDADC to CMD_SDADC
 
     strcpy(CMD_RCCO, "RCCO102");
     strcpy(CMD_RDAD, "RDAD");
@@ -433,6 +382,58 @@ void ServoCIEData::CIE_setup() {
     getCIEResponse();
     hostCom.print("\nCIE setup complete");
 }
+
+void ServoCIEData::initializeConfigs(const char* metricPath, const char* settingPath) {
+    bool metricConfigLoaded = false;
+    bool settingConfigLoaded = false;
+
+    if (SD.begin()) {
+        if (loadMetricFromSD(metricPath)) {
+            // Serial.println("✔ MetricConfig loaded from SD");
+            syncMetricSDToSPIFFS(metricPath);
+            metricConfigLoaded = true;
+        } else {
+            Serial.println("⚠ MetricConfig SD file missing, trying SPIFFS...");
+            if (loadMetricFromSPIFFS(metricPath)) {
+                Serial.println("✔ MetricConfig loaded from SPIFFS");
+                syncMetricSPIFFSToSD(metricPath);
+                metricConfigLoaded = true;
+            }
+        }
+
+        if (loadSettingFromSD(settingPath)) {
+            // Serial.println("✔ SettingConfig loaded from SD");
+            syncSettingSDToSPIFFS(settingPath);
+            settingConfigLoaded = true;
+        } else {
+            Serial.println("⚠ SettingConfig SD file missing, trying SPIFFS...");
+            if (loadSettingFromSPIFFS(settingPath)) {
+                Serial.println("✔ SettingConfig loaded from SPIFFS");
+                syncSettingSPIFFSToSD(settingPath);
+                settingConfigLoaded = true;
+            }
+        }
+    } else {
+        Serial.println("⚠ SD mount failed, using SPIFFS only...");
+        if (begin()) {
+            metricConfigLoaded = loadMetricFromSPIFFS(metricPath);
+            settingConfigLoaded = loadSettingFromSPIFFS(settingPath);
+        }
+    }
+
+    if (metricConfigLoaded) {
+        printAllMetrics();
+    } else {
+        Serial.println("❌ No metric configs loaded.");
+    }
+
+    if (settingConfigLoaded) {
+        printAllSettings();
+    } else {
+        Serial.println("❌ No setting configs loaded.");
+    }
+}
+
 // -------------------- Config helpers --------------------
 
 String ServoCIEData::concatConfigChannels(const Configs configs[], int size) {
