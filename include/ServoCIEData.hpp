@@ -32,6 +32,10 @@ public:
     void parseCIEData(char NextSCI_chr);
     void getCIEResponse();
     void CIE_setup();
+    void Send_SERVO_CMD(const char* InStr);
+    char CRC_calc(const char* localstring);
+    void ScaleMetrics();
+
 
     static const int MaxMetrics = 20;
     static const int MaxSettings = 20;
@@ -62,7 +66,6 @@ public:
 
 
 private:
-
     bool parseMetricLine(const String& line, Metric& m);
     bool parseSettingLine(const String& line, Setting& s);
 
@@ -81,12 +84,34 @@ private:
         // Add other modes as needed
     };
 
+    static constexpr char EOT = 0x04;
+    static constexpr char ESC = 0x1B;
+
+        // 🔒 Static command strings
+       // Mutable buffers for command strings
+    char CMD_RTIM[8];
+    char CMD_RCTY[8];
+    char CMD_SDADB[64];
+    char PAYLOAD_SDADB[64];
+    char PAYLOAD_SDADS[64];
+    char CMD_SDADS[64];
+    char CMD_SDADC[32];
+    char PAYLOAD_SDADC[32];
+    char CMD_RCCO[16];
+    char CMD_RDAD[8];
+    char CMD_RADAB[8];
+    char CMD_RADAS[8];
+    char CMD_RADC[8];
+
+    char tempCommand[128];
+
+
     RunModeType RunMode;
     // int RunMode;
     int ByteCount;
     int phase;
     int Error_info;
-    int inByte;     // collects the latest char from the ventilator
+    char inByte;     // collects the latest char from the ventilator
 
     int cieFlow = 0; // stores the flow signal received from CIE
     int cieFCO2 = 0;
@@ -205,9 +230,9 @@ private:
 
 
     // Add other private members as needed
-    void Send_SERVO_CMD(String InStr);
-    void ScaleMetrics();
-    char CRC_calc(String localstring);
+    // void Send_SERVO_CMD(String InStr);
+    // void ScaleMetrics();
+    // char CRC_calc(String localstring);
 
     // CIE constants
     // -------------

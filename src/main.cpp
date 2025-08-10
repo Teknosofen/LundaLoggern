@@ -2,9 +2,12 @@
 #include "main.hpp"
 
 // ---------------------------------
-// logo BMP file stored in SPIFFS
+// logo BMP file as well as factory default config files are stored in SPIFFS
 // to send to device run:
 // pio run --target uploadfs
+//
+// to format SPIFFS run:
+// pio run --target cleanfs
 // ---------------------------------
 
 
@@ -26,12 +29,16 @@ const char* SettingConfigPath = "/SettingConfig.txt";
 
 void setup() {
   hostCom.begin(115200); // Initialize Serial for debugging
-  // servoCom.begin(115200); // Assuming Serial2 is used for communication with the ventilator
+  delay(2000); // Wait for Serial to initialize
+ 
+  // ensure that the servoCOM used the appripriate parity!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   hostCom.println("LundaLogger setup started");
+
+  servoCom.begin(SERVO_BAUD, SERIAL_8E1, RXD2, TXD2); // RX = GPIO16, TX = GPIO17
 
   servoCIEData.begin();
  
-  delay(1000); // Wait for Serial to initialize
+  delay(2000); // Wait for Serial to initialize
 
   if (!SPIFFS.begin(false)) {
       Serial.println("SPIFFS mount failed");
@@ -97,12 +104,17 @@ void setup() {
       }
   }
 
-  if (metricConfigLoaded || settingConfigLoaded) {
+  if (metricConfigLoaded) {
       servoCIEData.printAllMetrics();  // You can expand this to print specific setting values too
   } else {
-      Serial.println("❌ No configs loaded.");
+      Serial.println("❌ No metric configs loaded.");
   }
 
+  if (settingConfigLoaded) {
+      servoCIEData.printAllSettings();  // You can expand this to print specific setting values too
+  } else {
+      Serial.println("❌ No setting configs loaded.");
+  }
 
   // Display setup
   tft.init();

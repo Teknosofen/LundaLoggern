@@ -22,6 +22,9 @@
 
 #define hostCom Serial
 #define servoCom Serial2
+#define RXD2 16
+#define TXD2 17
+#define SERVO_BAUD 38400    // baud rate for ventilator communication
 
 #define LCD_WIDTH  320
 #define LCD_HEIGHT 170
