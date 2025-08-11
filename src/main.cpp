@@ -18,7 +18,8 @@ ImageRenderer renderer(tft);
 ServoCIEData servoCIEData;
 
 SPIClass hspi(HSPI);
-const SPISettings SENSOR_SPI_SETTINGS = SPISettings(800000, MSBFIRST, SPI_MODE0);
+// const SPISettings SENSOR_SPI_SETTINGS = SPISettings(800000, MSBFIRST, SPI_MODE0);
+const SPISettings SENSOR_SPI_SETTINGS = SPISettings(25000000, MSBFIRST, SPI_MODE0); // 25 MHz
 
 SDManager sd(hspi, HSPI_CS); // Pass your CS pin here
 
@@ -38,11 +39,10 @@ void setup() {
 
   delay(2000); // Wait for Serial to initialize
 
-  
 
   hspi.begin(HSPI_SCLK, HSPI_MISO, HSPI_MOSI, HSPI_CS); // SCK, MISO, MOSI, CS
-  // Attempt to initialize SD card and update internal status
-  bool initSuccess = sd.begin();
+  
+  bool initSuccess = sd.begin(); // Attempt to initialize SD card and update internal status
   sd.setCardPresent(initSuccess); // Explicit status tracking
 
   if (sd.isCardPresent()) {
