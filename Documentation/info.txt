@@ -1,0 +1,1 @@
+A folder to keep non-code related project and device documentation
