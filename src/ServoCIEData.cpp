@@ -253,14 +253,6 @@ void ServoCIEData::ScaleMetrics() {
     hostCom.println();
 }
 
-// char ServoCIEData::CRC_calc(String localstring) {
-//     char chk = 0;
-//     unsigned int len = localstring.length();
-//     for (int i = 0; i < len; i++) {
-//         chk = chk ^ localstring[i];
-//     }
-//     return chk;
-// }
 // remoed use of String
 char ServoCIEData::CRC_calc(const char* localstring) {
     char chk = 0;
@@ -271,23 +263,6 @@ char ServoCIEData::CRC_calc(const char* localstring) {
 }
 
 
-// void ServoCIEData::Send_SERVO_CMD(String InStr) {
-//     char CRC = CRC_calc(InStr);
-//     servoCom.print(InStr);
-//     if (CRC < 0x10) {
-//         servoCom.print("0");
-//     }
-//     servoCom.write(CRC);          // Send raw CRC byte
-//     servoCom.write(EOT);          // Send EOT
-
-//     // servoCom.print(CRC, HEX);
-//     // servoCom.write(EOT);
-//     hostCom.print(InStr);
-//     // if (CRC < 0x10) {
-//     //     hostCom.print("0");
-//     // }
-//     // hostCom.print(CRC, HEX);
-// }
 // removed use of String
 void ServoCIEData::Send_SERVO_CMD(const char* InStr) {
     char CRC = CRC_calc(InStr);
@@ -706,3 +681,67 @@ bool ServoCIEData::parseSettingLine(const String& line, Configs& s) {
 
     return true;
 }
+
+    // Method to scale both metrics and settings
+void ServoCIEData::scaleAll(int metricSize, int settingSize) {
+    // Scale metrics
+    for (int i = 0; i < metricSize && i < metricCount; ++i) {
+        MetricScaled[i] = MetricUnscaled[i] * metrics[i].scaleFactor + metrics[i].offset;
+    }
+
+    // Scale settings
+    for (int i = 0; i < settingSize && i < settingCount; ++i) {
+        settingsScaled[i] = settingsUnscaled[i] * settings[i].scaleFactor + settings[i].offset;
+    }
+}
+
+void ServoCIEData::scaleCIEData(const float* unscaledArray, float* scaledArray, int count, const Configs* configsArray) {
+    for (int i = 0; i < count; ++i) {
+        scaledArray[i] = unscaledArray[i] * configsArray[i].scaleFactor + configsArray[i].offset;
+    }
+};
+
+
+String ServoCIEData::getScaledValuesAsString(const float* scaledArray, int count) {
+    String result = "";
+    for (int i = 0; i < count; ++i) {
+        result += String(scaledArray[i], 4); // 4 decimal places
+        result += (i < count - 1) ? '\t' : '\n';
+    }
+    return result;
+}
+
+// String metricsStr = getScaledValuesAsString(MetricScaled, metricCount);
+// String settingsStr = getScaledValuesAsString(SettingsScaled, settingCount);
+
+String ServoCIEData::getChannelsAsString(const Configs* configsArray, int count) {
+    String result = ""; 
+    for (int i = 0; i < count; ++i) {
+        result += configsArray[i].channel;
+        result += (i < count - 1) ? '\t' : '\n';
+    }
+    return result;
+}
+
+String ServoCIEData::getLabelsAsString(const Configs* configsArray, int count) {
+    String result = "";
+    for (int i = 0; i < count; ++i) {
+        result += configsArray[i].label;
+        result += (i < count - 1) ? '\t' : '\n';
+    }
+    return result;
+}
+
+String ServoCIEData::getUnitsAsString(const Configs* configsArray, int count) {
+    String result = "";
+    for (int i = 0; i < count; ++i) {
+        result += configsArray[i].unit;
+        result += (i < count - 1) ? '\t' : '\n';
+    }
+    return result;
+}
+
+// String metricsLabels = getLabelsAsString(metrics, metricCount);
+// String metricsUnits = getUnitsAsString(metrics, metricCount);
+// String settingsLabels = getLabelsAsString(settings, settingCount);
+// String settingsUnits = getUnitsAsString(settings, settingCount);

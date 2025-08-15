@@ -73,6 +73,15 @@ public:
     bool syncSettingSPIFFSToSD(const char* path);
     void printAllSettings();
 
+    void scaleAll(int metricSize, int settingSize);
+    void scaleCIEData(const float* unscaledArray, float* scaledArray, int count, const Configs* configsArray);
+    String getUnitsAsString(const Configs* configsArray, int count) ;
+    String getLabelsAsString(const Configs* configsArray, int count);
+    String getScaledValuesAsString(const float* scaledArray, int count);
+    String getChannelsAsString(const Configs* configsArray, int count);
+
+
+
 
 private:
     bool parseMetricLine(const String& line, Configs& m);
