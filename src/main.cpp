@@ -29,7 +29,7 @@ const char* MetricConfigPath = "/MetricConfig.txt";
 const char* SettingConfigPath = "/SettingConfig.txt";
 
 void setup() {
-  hostCom.begin(115200); // Initialize Serial for debugging
+  hostCom.begin(115200); // Initialize hostCom for debugging
   delay(2000); // Wait for Serial to initialize
  
   // ensure that the servoCOM used the appripriate parity!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -46,24 +46,24 @@ void setup() {
   sd.setCardPresent(initSuccess); // Explicit status tracking
 
   if (sd.isCardPresent()) {
-    Serial.println("✅ SD card is present and mounted.");
+    hostCom.println("✅ SD card is present and mounted.");
 
     // Write and append to a file
     if (sd.writeTextFile("/log.txt", "HSPI test initialized.")) {
-      Serial.println("✍️ Wrote initial log file.");
+      hostCom.println("✍️ Wrote initial log file.");
     }
 
     if (sd.appendTextFile("/log.txt", "\nAppended line via SDManager.")) {
-      Serial.println("📎 Appended to log file.");
+      hostCom.println("📎 Appended to log file.");
     }
   } else {
-    Serial.println("❌ SD card is not detected or failed to mount.");
+    hostCom.println("❌ SD card is not detected or failed to mount.");
   }
 
   if (!SPIFFS.begin(false)) {
-      Serial.println("❌ SPIFFS mount failed");
+      hostCom.println("❌ SPIFFS mount failed");
    } else {
-      Serial.println("✅ SPIFFS mounted successfully");
+      hostCom.println("✅ SPIFFS mounted successfully");
   }
   
   servoCIEData.initializeConfigs(MetricConfigPath, SettingConfigPath);
@@ -97,12 +97,12 @@ void setup() {
   hostCom.println(WiFiserver.getApIpAddress());
 
   // List files in SPIFFS for debugging
-  Serial.println("Listing files in SPIFFS:");
+  hostCom.println("Listing files in SPIFFS:");
   File root = SPIFFS.open("/");
   File file = root.openNextFile();
 
   while (file) {
-      Serial.println(file.name());
+      hostCom.println(file.name());
       file = root.openNextFile();
   }
 
@@ -149,8 +149,14 @@ void loop() {
     hostCom.println("looping..."); // Print a message to the host serial port
 
   } else {
-  }
+  } // timed loop
 
+  // check for serial data from CIE and ventilator
+
+  if (servoCom.available()) {
+    char inByte = servoCom.read();                               // get the byte from the ventilator or cpno PC
+    servoCIEData.parseCIEData(inByte);
+  }
   WiFiserver.handleClient();  // This keeps the web server alive
 
   }

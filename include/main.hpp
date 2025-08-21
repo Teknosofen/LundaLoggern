@@ -31,7 +31,7 @@
 
 // #define SDCARD_CS_PIN 5
 
-#define SET_LOOP_TIME 1000000                               // slow loop update in [ms]
+#define SET_LOOP_TIME 1000000                               // slow loop update in [us]
 
 #include <Arduino.h>
 

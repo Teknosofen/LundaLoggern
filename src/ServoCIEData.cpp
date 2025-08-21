@@ -364,32 +364,32 @@ void ServoCIEData::initializeConfigs(const char* metricPath, const char* setting
 
     if (SD.begin()) {
         if (loadMetricFromSD(metricPath)) {
-            // Serial.println("✔ MetricConfig loaded from SD");
+            // hostCom.println("✔ MetricConfig loaded from SD");
             syncMetricSDToSPIFFS(metricPath);
             metricConfigLoaded = true;
         } else {
-            Serial.println("⚠ MetricConfig SD file missing, trying SPIFFS...");
+            hostCom.println("⚠ MetricConfig SD file missing, trying SPIFFS...");
             if (loadMetricFromSPIFFS(metricPath)) {
-                Serial.println("✔ MetricConfig loaded from SPIFFS");
+                hostCom.println("✔ MetricConfig loaded from SPIFFS");
                 syncMetricSPIFFSToSD(metricPath);
                 metricConfigLoaded = true;
             }
         }
 
         if (loadSettingFromSD(settingPath)) {
-            // Serial.println("✔ SettingConfig loaded from SD");
+            // hostCom.println("✔ SettingConfig loaded from SD");
             syncSettingSDToSPIFFS(settingPath);
             settingConfigLoaded = true;
         } else {
-            Serial.println("⚠ SettingConfig SD file missing, trying SPIFFS...");
+            hostCom.println("⚠ SettingConfig SD file missing, trying SPIFFS...");
             if (loadSettingFromSPIFFS(settingPath)) {
-                Serial.println("✔ SettingConfig loaded from SPIFFS");
+                hostCom.println("✔ SettingConfig loaded from SPIFFS");
                 syncSettingSPIFFSToSD(settingPath);
                 settingConfigLoaded = true;
             }
         }
     } else {
-        Serial.println("⚠ SD mount failed, using SPIFFS only...");
+        hostCom.println("⚠ SD mount failed, using SPIFFS only...");
         if (begin()) {
             metricConfigLoaded = loadMetricFromSPIFFS(metricPath);
             settingConfigLoaded = loadSettingFromSPIFFS(settingPath);
@@ -399,13 +399,13 @@ void ServoCIEData::initializeConfigs(const char* metricPath, const char* setting
     if (metricConfigLoaded) {
         printAllMetrics();
     } else {
-        Serial.println("❌ No metric configs loaded.");
+        hostCom.println("❌ No metric configs loaded.");
     }
 
     if (settingConfigLoaded) {
         printAllSettings();
     } else {
-        Serial.println("❌ No setting configs loaded.");
+        hostCom.println("❌ No setting configs loaded.");
     }
 }
 
@@ -426,12 +426,12 @@ bool ServoCIEData::loadMetricFromSD(const char* path) {
     metricCount = 0;
     File file = SD.open(path);
     if (!file || file.isDirectory()) {
-        Serial.println("❌ SD metric file not found");
+        hostCom.println("❌ SD metric file not found");
         metricConfigLoaded = false;
         return false;
     }
 
-    Serial.println("✅ Loaded metric config from SD");
+    hostCom.println("✅ Loaded metric config from SD");
     while (file.available()) {
         String line = file.readStringUntil('\n');
         line.trim();
@@ -452,12 +452,12 @@ bool ServoCIEData::loadMetricFromSPIFFS(const char* path) {
     metricCount = 0;
     File file = SPIFFS.open(path);
     if (!file || file.isDirectory()) {
-        Serial.println("❌ SPIFFS metric file not found");
+        hostCom.println("❌ SPIFFS metric file not found");
         metricConfigLoaded = false;
         return false;
     }
 
-    Serial.println("✅ Loaded metric config from SPIFFS");
+    hostCom.println("✅ Loaded metric config from SPIFFS");
     while (file.available()) {
         String line = file.readStringUntil('\n');
         line.trim();
@@ -477,13 +477,13 @@ bool ServoCIEData::loadMetricFromSPIFFS(const char* path) {
 bool ServoCIEData::syncMetricSDToSPIFFS(const char* path) {
     File inFile = SD.open(path);
     if (!inFile || inFile.isDirectory()) {
-        Serial.println("❌ SD metric file not found for syncing");
+        hostCom.println("❌ SD metric file not found for syncing");
         return false;
     }
 
     File outFile = SPIFFS.open(path, FILE_WRITE);
     if (!outFile) {
-        Serial.println("❌ Failed to open SPIFFS metric file for writing");
+        hostCom.println("❌ Failed to open SPIFFS metric file for writing");
         inFile.close();
         return false;
     }
@@ -494,20 +494,20 @@ bool ServoCIEData::syncMetricSDToSPIFFS(const char* path) {
 
     inFile.close();
     outFile.close();
-    Serial.println("🔁 Synced SD → SPIFFS (metrics)");
+    hostCom.println("🔁 Synced SD → SPIFFS (metrics)");
     return true;
 }
 
 bool ServoCIEData::syncMetricSPIFFSToSD(const char* path) {
     File inFile = SPIFFS.open(path);
     if (!inFile || inFile.isDirectory()) {
-        Serial.println("❌ SPIFFS metric file not found for syncing");
+        hostCom.println("❌ SPIFFS metric file not found for syncing");
         return false;
     }
 
     File outFile = SD.open(path, FILE_WRITE);
     if (!outFile) {
-        Serial.println("❌ Failed to open SD metric file for writing");
+        hostCom.println("❌ Failed to open SD metric file for writing");
         inFile.close();
         return false;
     }
@@ -518,13 +518,13 @@ bool ServoCIEData::syncMetricSPIFFSToSD(const char* path) {
 
     inFile.close();
     outFile.close();
-    Serial.println("🔁 Synced SPIFFS → SD (metrics)");
+    hostCom.println("🔁 Synced SPIFFS → SD (metrics)");
     return true;
 }
 
 void ServoCIEData::printAllMetrics() {
     for (int i = 0; i < metricCount; i++) {
-        Serial.printf("%s:\t%s [%s]\tScale: %.4f\tOffset: %.2f\n",
+        hostCom.printf("%s:\t%s [%s]\tScale: %.4f\tOffset: %.2f\n",
                       metrics[i].channel.c_str(),
                       metrics[i].label.c_str(),
                       metrics[i].unit.c_str(),
@@ -557,12 +557,12 @@ bool ServoCIEData::loadSettingFromSD(const char* path) {
     settingCount = 0;
     File file = SD.open(path);
     if (!file || file.isDirectory()) {
-        Serial.println("❌ SD setting file not found");
+        hostCom.println("❌ SD setting file not found");
         settingConfigLoaded = false;
         return false;
     }
 
-    Serial.println("✅ Loaded settings from SD");
+    hostCom.println("✅ Loaded settings from SD");
     while (file.available()) {
         String line = file.readStringUntil('\n');
         line.trim();
@@ -583,12 +583,12 @@ bool ServoCIEData::loadSettingFromSPIFFS(const char* path) {
     settingCount = 0;
     File file = SPIFFS.open(path);
     if (!file || file.isDirectory()) {
-        Serial.println("❌ SPIFFS setting file not found");
+        hostCom.println("❌ SPIFFS setting file not found");
         settingConfigLoaded = false;
         return false;
     }
 
-    Serial.println("✅ Loaded settings from SPIFFS");
+    hostCom.println("✅ Loaded settings from SPIFFS");
     while (file.available()) {
         String line = file.readStringUntil('\n');
         line.trim();
@@ -608,13 +608,13 @@ bool ServoCIEData::loadSettingFromSPIFFS(const char* path) {
 bool ServoCIEData::syncSettingSDToSPIFFS(const char* path) {
     File inFile = SD.open(path);
     if (!inFile || inFile.isDirectory()) {
-        Serial.println("❌ SD setting file not found for syncing");
+        hostCom.println("❌ SD setting file not found for syncing");
         return false;
     }
 
     File outFile = SPIFFS.open(path, FILE_WRITE);
     if (!outFile) {
-        Serial.println("❌ Failed to open SPIFFS setting file for writing");
+        hostCom.println("❌ Failed to open SPIFFS setting file for writing");
         inFile.close();
         return false;
     }
@@ -625,20 +625,20 @@ bool ServoCIEData::syncSettingSDToSPIFFS(const char* path) {
 
     inFile.close();
     outFile.close();
-    Serial.println("🔁 Synced SD → SPIFFS (settings)");
+    hostCom.println("🔁 Synced SD → SPIFFS (settings)");
     return true;
 }
 
 bool ServoCIEData::syncSettingSPIFFSToSD(const char* path) {
     File inFile = SPIFFS.open(path);
     if (!inFile || inFile.isDirectory()) {
-        Serial.println("❌ SPIFFS setting file not found for syncing");
+        hostCom.println("❌ SPIFFS setting file not found for syncing");
         return false;
     }
 
     File outFile = SD.open(path, FILE_WRITE);
     if (!outFile) {
-        Serial.println("❌ Failed to open SD setting file for writing");
+        hostCom.println("❌ Failed to open SD setting file for writing");
         inFile.close();
         return false;
     }
@@ -649,13 +649,13 @@ bool ServoCIEData::syncSettingSPIFFSToSD(const char* path) {
 
     inFile.close();
     outFile.close();
-    Serial.println("🔁 Synced SPIFFS → SD (settings)");
+    hostCom.println("🔁 Synced SPIFFS → SD (settings)");
     return true;
 }
 
 void ServoCIEData::printAllSettings() {
     for (int i = 0; i < settingCount; i++) {
-        Serial.printf("%s:\t%s [%s]\tScale: %.4f\tOffset: %.2f\n",
+        hostCom.printf("%s:\t%s [%s]\tScale: %.4f\tOffset: %.2f\n",
                       settings[i].channel.c_str(),
                       settings[i].label.c_str(),
                       settings[i].unit.c_str(),

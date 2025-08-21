@@ -22,7 +22,7 @@ WifiApServer::WifiApServer(String ssid, String password)
 void WifiApServer::begin() {
     WiFi.softAP(_ssid.c_str(), _password.c_str());
     if (!SPIFFS.begin(true)) {
-        Serial.println("Failed to mount SPIFFS");
+        hostCom.println("Failed to mount SPIFFS");
     }
     setupWebServer();
     server.begin();
@@ -70,7 +70,9 @@ void WifiApServer::handleRoot() {
     server.send(200, "text/html", generateHtmlPage());
 }
 
+// Note: The file manager handles both download and delete actions.
 void WifiApServer::handleFileManager() {
+    
     File root = SD.open("/");
     File file = root.openNextFile();
 
@@ -121,7 +123,7 @@ void WifiApServer::handleFileManager() {
 
     server.send(200, "text/html", html);
 }
-// Note: The file manager handles both download and delete actions.
+
 
 void WifiApServer::handleFileDownload() {
     for (int i = 0; i < server.args(); ++i) {

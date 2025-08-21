@@ -3,9 +3,10 @@
 
 #include <Arduino.h>
 #include "main.hpp"
-// new 2025-08-04
 #include <FS.h>
 #include <SPIFFS.h>
+
+// #define hostCom Serial          // potential duplicate
 
 // new 2025-08-04
 // struct Metric {
@@ -105,8 +106,8 @@ private:
     static constexpr char EOT = 0x04;
     static constexpr char ESC = 0x1B;
 
-        // 🔒 Static command strings
-       // Mutable buffers for command strings
+    // 🔒 Static command strings
+    // Mutable buffers for command strings
     char CMD_RTIM[8];
     char CMD_RCTY[8];
     char CMD_SDADB[64];
