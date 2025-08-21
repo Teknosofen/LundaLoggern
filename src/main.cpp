@@ -60,6 +60,7 @@ void setup() {
     hostCom.println("❌ SD card is not detected or failed to mount.");
   }
 
+  // Check where this tst is (to be) made and remove redundant uses, wcheck in the WiiAPServer as well
   if (!SPIFFS.begin(false)) {
       hostCom.println("❌ SPIFFS mount failed");
    } else {

@@ -1,5 +1,4 @@
 #include "SDManager.hpp"
-#define hostCom Serial // test
 
 SDManager::SDManager(SPIClass &spiBus, uint8_t csPin)
   : spi(spiBus), cs(csPin), cardPresent(false), state(SD_IDLE),

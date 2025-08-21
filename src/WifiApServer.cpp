@@ -21,9 +21,10 @@ WifiApServer::WifiApServer(String ssid, String password)
 
 void WifiApServer::begin() {
     WiFi.softAP(_ssid.c_str(), _password.c_str());
-    if (!SPIFFS.begin(true)) {
-        hostCom.println("Failed to mount SPIFFS");
-    }
+
+    // if (!SPIFFS.begin(true)) {
+    //     hostCom.println("Failed to mount SPIFFS");
+    // }
     setupWebServer();
     server.begin();
 }
