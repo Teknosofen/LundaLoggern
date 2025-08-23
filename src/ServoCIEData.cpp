@@ -303,17 +303,17 @@ void ServoCIEData::parseCIEData(char NextSCI_chr) {
     }
 }
 
-void ServoCIEData::ScaleMetrics() {
-    for (int i = 0; i < NumMetrics; i++) {
-        MetricScaled[i] = MetricUnscaled[i] * MetricScaleFactors[i] - MetricOffset[i];
-        hostCom.print(MetricLabels[i]);
-        hostCom.print(" = ");
-        hostCom.print(MetricScaled[i]);
-        hostCom.print(" ");
-        hostCom.println(MetricUnits[i]);
-    }
-    hostCom.println();
-}
+// void ServoCIEData::ScaleMetrics() {
+//     for (int i = 0; i < NumMetrics; i++) {
+//         MetricScaled[i] = MetricUnscaled[i] * MetricScaleFactors[i] - MetricOffset[i];
+//         hostCom.print(MetricLabels[i]);
+//         hostCom.print(" = ");
+//         hostCom.print(MetricScaled[i]);
+//         hostCom.print(" ");
+//         hostCom.println(MetricUnits[i]);
+//     }
+//     hostCom.println();
+// }
 
 // remoed use of String
 char ServoCIEData::CRC_calc(const char* localstring) {
@@ -356,6 +356,40 @@ void ServoCIEData::getCIEResponse() {
     hostCom.println(" no more CIE data available to receive");
 }
 
+// Assumes: CRC_calc(const char* nullTerminated) is available
+//          EOT check is done by the reader (getCIEResponse).
+// helper functions for parsing digits quickly
+static inline int parse2(const char* p) {
+    return (p[0]-'0')*10 + (p[1]-'0');
+}
+static inline int parse4(const char* p) {
+    return (p[0]-'0')*1000 + (p[1]-'0')*100 + (p[2]-'0')*10 + (p[3]-'0');
+}
+
+
+DateTime ServoCIEData::parseRTIMResponse(const char* response, size_t len) {
+    // Expect 14 digits + 1 CRC (no EOT)
+    if (len < 15) return DateTime(); // invalid
+
+    // timeData must be null-terminated for CRC_calc
+    char timeData[15];
+    memcpy(timeData, response, 14);
+    timeData[14] = '\0';
+
+    char receivedCRC = response[14];
+    char computedCRC = CRC_calc(timeData);
+    if (computedCRC != receivedCRC) return DateTime(); // invalid
+
+    // Fast fixed-width parsing
+    int year   = parse4(timeData + 0);
+    int month  = parse2(timeData + 4);
+    int day    = parse2(timeData + 6);
+    int hour   = parse2(timeData + 8);
+    int minute = parse2(timeData +10);
+    int second = parse2(timeData +12);
+
+    return DateTime(year, month, day, hour, minute, second, true);
+}
 
 
 // 2025-08-09:
@@ -387,8 +421,9 @@ void ServoCIEData::CIE_setup() {
     servoCom.write(ESC);
     getCIEResponse();
 
+    // get SERVO ventilator clock:
     Send_SERVO_CMD(CMD_RTIM);
-    getCIEResponse();
+    getCIEResponse(); // manage the response as well:
 
     Send_SERVO_CMD(CMD_RCTY);
     getCIEResponse();
@@ -419,6 +454,8 @@ void ServoCIEData::CIE_setup() {
     getCIEResponse();
     hostCom.print("\nCIE setup complete");
 }
+
+
 
 void ServoCIEData::initializeConfigs(const char* metricPath, const char* settingPath) {
     bool metricConfigLoaded = false;
@@ -745,17 +782,17 @@ bool ServoCIEData::parseSettingLine(const String& line, Configs& s) {
 }
 
     // Method to scale both metrics and settings
-void ServoCIEData::scaleAll(int metricSize, int settingSize) {
-    // Scale metrics
-    for (int i = 0; i < metricSize && i < metricCount; ++i) {
-        MetricScaled[i] = MetricUnscaled[i] * metrics[i].scaleFactor + metrics[i].offset;
-    }
+// void ServoCIEData::scaleAll(int metricSize, int settingSize) {
+//     // Scale metrics
+//     for (int i = 0; i < metricSize && i < metricCount; ++i) {
+//         MetricScaled[i] = MetricUnscaled[i] * metrics[i].scaleFactor + metrics[i].offset;
+//     }
 
-    // Scale settings
-    for (int i = 0; i < settingSize && i < settingCount; ++i) {
-        settingsScaled[i] = settingsUnscaled[i] * settings[i].scaleFactor + settings[i].offset;
-    }
-}
+//     // Scale settings
+//     for (int i = 0; i < settingSize && i < settingCount; ++i) {
+//         settingsScaled[i] = settingsUnscaled[i] * settings[i].scaleFactor + settings[i].offset;
+//     }
+// }
 
 void ServoCIEData::scaleCIEData(const float* unscaledArray, float* scaledArray, int count, const Configs* configsArray) {
     for (int i = 0; i < count; ++i) {
