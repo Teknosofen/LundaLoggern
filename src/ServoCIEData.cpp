@@ -61,75 +61,137 @@ void ServoCIEData::parseCIEData(char NextSCI_chr) {
             RunMode = Awaiting_Info;
             break;
 
+        // new 2025-08-23
         case Breath_Data:
             if (ByteCount == 2) {
-                MetricUnscaled[MetricNo] = 256 * NextSCI_chr;
+                metrics[MetricNo].unscaled = 256 * NextSCI_chr;
                 --ByteCount;
             } else if (ByteCount == 1) {
-                MetricUnscaled[MetricNo] += NextSCI_chr;
+                metrics[MetricNo].unscaled += NextSCI_chr;
                 --ByteCount;
-                MetricScaled[MetricNo] = MetricUnscaled[MetricNo] * MetricScaleFactors[MetricNo] - MetricOffset[MetricNo];
+                metrics[MetricNo].scaled = metrics[MetricNo].unscaled * metrics[MetricNo].scaleFactor - metrics[MetricNo].offset;
             } else if (ByteCount == 0 && NextSCI_chr == EndFlag) {
-                int k = 0;
-                ventO2BreathData.cieVtCO2   = MetricScaled[k++];
-                ventO2BreathData.cieFetCO2  = MetricScaled[k++];
-                ventO2BreathData.cieMVCO2   = MetricScaled[k++];
-                ventO2BreathData.cieRR      = MetricScaled[k++];
-                ventO2BreathData.cieVtInsp  = MetricScaled[k++];
-                ventO2BreathData.cieVtExp   = MetricScaled[k++];
-                ventO2BreathData.cieMVinsp  = MetricScaled[k++];
-                ventO2BreathData.cieMVExp   = MetricScaled[k++];
-                ventO2BreathData.cieFiO2    = MetricScaled[k++];
-                ventO2BreathData.ciePEEP    = MetricScaled[k++];
-                ventO2BreathData.ciePplat   = MetricScaled[k++];
-                ventO2BreathData.cieIE      = MetricScaled[k++];
-                ventO2BreathData.ciePpeak   = MetricScaled[k++];
-                ventO2BreathData.Pmean      = MetricScaled[k++];
-                ventO2BreathData.cieTi2Ttot = MetricScaled[k];
+                // instead of copying into ventO2BreathData,
+                // you directly use metrics[k].scaled everywhere in your code
+                // Example:
+                // float rr = metrics[3].scaled;   // cieRR
+                // float ie = metrics[11].scaled;  // cieIE
 
-                if (ventO2BreathData.cieIE < (cieDataInvalid - 1) * 0.01) {
-                    ventO2BreathData.calcExpTime = 60.0 / (ventO2BreathData.cieRR * (1.0 + ventO2BreathData.cieIE));
-                    ventO2BreathData.calcInspTime = ventO2BreathData.cieIE * 60.0 / (ventO2BreathData.cieRR * (1.0 + ventO2BreathData.cieIE));
-                } else {
-                    ventO2BreathData.calcExpTime = (1 - ventO2BreathData.cieTi2Ttot) * 60 / ventO2BreathData.cieRR;
-                    ventO2BreathData.calcInspTime = ventO2BreathData.cieTi2Ttot * 60 / ventO2BreathData.cieRR;
-                }
+
+                // Special cases no longer needed I assume
+                
+                // float cieRR = metrics[3].scaled;
+                // float cieIE = metrics[11].scaled;
+                // float cieTi2Ttot = metrics[14].scaled;
+
+                // if (cieIE < (cieDataInvalid - 1) * 0.01) {
+                //     metrics[metricCount].scaled = 60.0 / (cieRR * (1.0 + cieIE)); // calcExpTime
+                //     metrics[metricCount+1].scaled = cieIE * 60.0 / (cieRR * (1.0 + cieIE)); // calcInspTime
+                // } else {
+                //     metrics[metricCount].scaled = (1 - cieTi2Ttot) * 60 / cieRR; // calcExpTime
+                //     metrics[metricCount+1].scaled = cieTi2Ttot * 60 / cieRR;     // calcInspTime
+                // }
+
                 RunMode = End_Flag_Found;
-            } else { // check when this is appliccable
+            } else {
                 MetricNo++;
-                MetricUnscaled[MetricNo] = 256 * NextSCI_chr;
+                metrics[MetricNo].unscaled = 256 * NextSCI_chr;
                 ByteCount = 1;
             }
-
             break;
 
-            case Settings_Data:
+        case Settings_Data:
             if (ByteCount == 2) {
-                settingsUnscaled[settingsNo] = 256 * NextSCI_chr;
+                settings[settingsNo].unscaled = 256 * NextSCI_chr;
                 --ByteCount;
             } else if (ByteCount == 1) {
-                settingsUnscaled[settingsNo] += NextSCI_chr;
+                settings[settingsNo].unscaled += NextSCI_chr;
                 --ByteCount;
-                settingsScaled[settingsNo] = settingsUnscaled[settingsNo] * settingsScaleFactors[settingsNo] - settingsOffset[settingsNo];
+                settings[settingsNo].scaled = settings[settingsNo].unscaled * settings[settingsNo].scaleFactor - settings[settingsNo].offset;
             } else if (ByteCount == 0 && NextSCI_chr == EndFlag) {
-                int k = 0;
-                servoSettings.setRespRate   = settingsScaled[k++];
-                servoSettings.setMinuteVol  = settingsScaled[k++];
-                servoSettings.setPeep       = settingsScaled[k++];
-                servoSettings.setFiO2       = settingsScaled[k++];
-                servoSettings.setInspPress  = settingsScaled[k++];
-                servoSettings.setVt         = settingsScaled[k++];
-                servoSettings.setVentMode   = settingsScaled[k++];
-                servoSettings.setPatRange   = settingsScaled[k++];
-                servoSettings.setComplianceCompensationOn = settingsScaled[k++];
-                servoSettings.setIERatio    = settingsScaled[k];
+                // no more servoSettings struct — use settings[k].scaled directly
+                // Example:
+                // float setRespRate = settings[0].scaled;
+                // float setFiO2     = settings[3].scaled;
+
                 RunMode = End_Flag_Found;
             } else {
                 settingsNo++;
-                settingsUnscaled[settingsNo] = 256 * NextSCI_chr;
+                settings[settingsNo].unscaled = 256 * NextSCI_chr;
                 ByteCount = 1;
             }
             break;
+
+
+        // case Breath_Data:
+        //     if (ByteCount == 2) {
+        //         MetricUnscaled[MetricNo] = 256 * NextSCI_chr;
+        //         --ByteCount;
+        //     } else if (ByteCount == 1) {
+        //         MetricUnscaled[MetricNo] += NextSCI_chr;
+        //         --ByteCount;
+        //         MetricScaled[MetricNo] = MetricUnscaled[MetricNo] * MetricScaleFactors[MetricNo] - MetricOffset[MetricNo];
+        //     } else if (ByteCount == 0 && NextSCI_chr == EndFlag) {
+        //         int k = 0;
+        //         ventO2BreathData.cieVtCO2   = MetricScaled[k++];
+        //         ventO2BreathData.cieFetCO2  = MetricScaled[k++];
+        //         ventO2BreathData.cieMVCO2   = MetricScaled[k++];
+        //         ventO2BreathData.cieRR      = MetricScaled[k++];
+        //         ventO2BreathData.cieVtInsp  = MetricScaled[k++];
+        //         ventO2BreathData.cieVtExp   = MetricScaled[k++];
+        //         ventO2BreathData.cieMVinsp  = MetricScaled[k++];
+        //         ventO2BreathData.cieMVExp   = MetricScaled[k++];
+        //         ventO2BreathData.cieFiO2    = MetricScaled[k++];
+        //         ventO2BreathData.ciePEEP    = MetricScaled[k++];
+        //         ventO2BreathData.ciePplat   = MetricScaled[k++];
+        //         ventO2BreathData.cieIE      = MetricScaled[k++];
+        //         ventO2BreathData.ciePpeak   = MetricScaled[k++];
+        //         ventO2BreathData.Pmean      = MetricScaled[k++];
+        //         ventO2BreathData.cieTi2Ttot = MetricScaled[k];
+
+        //         if (ventO2BreathData.cieIE < (cieDataInvalid - 1) * 0.01) {
+        //             ventO2BreathData.calcExpTime = 60.0 / (ventO2BreathData.cieRR * (1.0 + ventO2BreathData.cieIE));
+        //             ventO2BreathData.calcInspTime = ventO2BreathData.cieIE * 60.0 / (ventO2BreathData.cieRR * (1.0 + ventO2BreathData.cieIE));
+        //         } else {
+        //             ventO2BreathData.calcExpTime = (1 - ventO2BreathData.cieTi2Ttot) * 60 / ventO2BreathData.cieRR;
+        //             ventO2BreathData.calcInspTime = ventO2BreathData.cieTi2Ttot * 60 / ventO2BreathData.cieRR;
+        //         }
+        //         RunMode = End_Flag_Found;
+        //     } else { // check when this is appliccable
+        //         MetricNo++;
+        //         MetricUnscaled[MetricNo] = 256 * NextSCI_chr;
+        //         ByteCount = 1;
+        //     }
+
+        //     break;
+
+        //     case Settings_Data:
+        //     if (ByteCount == 2) {
+        //         settingsUnscaled[settingsNo] = 256 * NextSCI_chr;
+        //         --ByteCount;
+        //     } else if (ByteCount == 1) {
+        //         settingsUnscaled[settingsNo] += NextSCI_chr;
+        //         --ByteCount;
+        //         settingsScaled[settingsNo] = settingsUnscaled[settingsNo] * settingsScaleFactors[settingsNo] - settingsOffset[settingsNo];
+        //     } else if (ByteCount == 0 && NextSCI_chr == EndFlag) {
+        //         int k = 0;
+        //         servoSettings.setRespRate   = settingsScaled[k++];
+        //         servoSettings.setMinuteVol  = settingsScaled[k++];
+        //         servoSettings.setPeep       = settingsScaled[k++];
+        //         servoSettings.setFiO2       = settingsScaled[k++];
+        //         servoSettings.setInspPress  = settingsScaled[k++];
+        //         servoSettings.setVt         = settingsScaled[k++];
+        //         servoSettings.setVentMode   = settingsScaled[k++];
+        //         servoSettings.setPatRange   = settingsScaled[k++];
+        //         servoSettings.setComplianceCompensationOn = settingsScaled[k++];
+        //         servoSettings.setIERatio    = settingsScaled[k];
+        //         RunMode = End_Flag_Found;
+        //     } else {
+        //         settingsNo++;
+        //         settingsUnscaled[settingsNo] = 256 * NextSCI_chr;
+        //         ByteCount = 1;
+        //     }
+        //     break;
         case Value_Data:
             switch (CurveCounter) {
                 case 0:

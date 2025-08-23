@@ -31,6 +31,8 @@ struct Configs {
     String unit;
     float scaleFactor;
     float offset;
+    float unscaled;   // raw incoming value
+    float scaled;     // scaled/calibrated value
 };
 
 
