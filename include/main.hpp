@@ -31,7 +31,12 @@
 
 // #define SDCARD_CS_PIN 5
 
-#define SET_LOOP_TIME 1000000                               // slow loop update in [us]
+#define SET_LOOP_TIME 1000000      // slow loop update in [us]
+
+// CIE communication timing
+const unsigned long TIMEOUT_MS = 20000;      // 20 seconds without data = lost
+const unsigned long INIT_INTERVAL_MS = 5000; // Retry INIT every 5 seconds
+
 
 #include <Arduino.h>
 

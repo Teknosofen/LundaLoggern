@@ -45,6 +45,7 @@ public:
     void parseCIEData(char NextSCI_chr);
     void getCIEResponse();
     DateTime parseRTIMResponse(const char* response, size_t len);
+    bool CIE_comCheck();
     void CIE_setup();
     void Send_SERVO_CMD(const char* InStr);
     char CRC_calc(const char* localstring);
@@ -52,6 +53,22 @@ public:
     String concatConfigChannels(const Configs configs[], int numConfigs);
     void initializeConfigs(const char* metricPath, const char* settingPath);
 
+   
+    // Communication status
+    void setComOpen(bool state);
+    bool isComOpen() const;
+
+    // Init attempt timestamp
+    void setLastInitAttempt(unsigned long timestamp);
+    unsigned long getLastInitAttempt() const;
+
+    // Last message timestamp
+    void setLastMessageTime(unsigned long timestamp);
+    unsigned long getLastMessageTime() const;
+    
+    
+    
+    // Configs
     static const int MaxMetrics = 20;
     static const int MaxSettings = 20;
 
@@ -90,6 +107,11 @@ public:
 
 
 private:
+    // communication timing stuff
+    bool comOpen = false;
+    unsigned long lastMessageTime = 0;
+    unsigned long lastInitAttempt = 0;
+
     bool parseMetricLine(const String& line, Configs& m);
     bool parseSettingLine(const String& line, Configs& s);
 

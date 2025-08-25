@@ -111,6 +111,8 @@ void setup() {
 
 void loop() {
 
+  unsigned long now = millis();
+
   static bool initLoop = false; // Flag to check if loop has been initialized
   if (!initLoop) {
     initLoop = true; // Set the flag to true to indicate loop has been initialized
@@ -121,7 +123,7 @@ void loop() {
     tft.setTextSize(1); // Set text size for the next line
     renderer.pushFullImage(220, 40, 100, 100, lundaLogo);
     renderer.drawSDStatusIndicator(sd.isCardPresent());
-  }
+  } // init loop
 
   static uint32_t loopStartTime = millis(); // Record the start time of the loop
   if (micros() - loopStartTime > SET_LOOP_TIME) { // time loop
@@ -154,10 +156,32 @@ void loop() {
 
   // check for serial data from CIE and ventilator
 
+  // Supervise timeout
+  if (servoCIEData.isComOpen() && (now - servoCIEData.getLastMessageTime() > TIMEOUT_MS)) {
+      hostCom.println("⚠️ Connection lost due to timeout.");
+      servoCIEData.setComOpen(false);
+      servoCIEData.setLastInitAttempt(now); // Reset init timer
+  }
+
+  // Retry INIT if communication is lost
+  if (!servoCIEData.isComOpen() && (now - servoCIEData.getLastInitAttempt() > INIT_INTERVAL_MS)) {
+    hostCom.println("🔄 Sending INIT...");
+      if (servoCIEData.CIE_comCheck()) {
+          hostCom.println("✅ CIE communication re-established.");
+          servoCIEData.setComOpen(true);
+          servoCIEData.setLastMessageTime(now); // Reset message timer
+      } else {
+          hostCom.println("❌ CIE communication re-check failed.");
+      }
+      servoCIEData.setLastInitAttempt(now);
+  }
+
   if (servoCom.available()) {
     char inByte = servoCom.read();                               // get the byte from the ventilator or cpno PC
     servoCIEData.parseCIEData(inByte);
   }
+
+
   WiFiserver.handleClient();  // This keeps the web server alive
 
   }

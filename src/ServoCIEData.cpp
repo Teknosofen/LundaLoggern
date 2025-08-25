@@ -366,7 +366,6 @@ static inline int parse4(const char* p) {
     return (p[0]-'0')*1000 + (p[1]-'0')*100 + (p[2]-'0')*10 + (p[3]-'0');
 }
 
-
 DateTime ServoCIEData::parseRTIMResponse(const char* response, size_t len) {
     // Expect 14 digits + 1 CRC (no EOT)
     if (len < 15) return DateTime(); // invalid
@@ -389,6 +388,66 @@ DateTime ServoCIEData::parseRTIMResponse(const char* response, size_t len) {
     int second = parse2(timeData +12);
 
     return DateTime(year, month, day, hour, minute, second, true);
+}
+
+bool ServoCIEData::CIE_comCheck() {
+    // 2.4.1 Empty command  
+    // The empty command can be used for connection check. 
+    // Input syntax:  <EOT> 
+    // Output syntax: *<CHK><EOT>  
+
+    const unsigned long TIMEOUT_MS = 500; // check that thi is not too long
+    unsigned long start = millis();
+
+    // Send EOT as init message
+    servoCom.write(EOT);
+    hostCom.print("Checking CIE connection");
+
+     // Wait for 2 bytes
+    while (servoCom.available() < 2 && ((millis() - start) < TIMEOUT_MS)) {
+        delay(5);
+    }
+
+    if (servoCom.available() < 2) {
+        return false; // Timeout or incomplete response
+    }
+
+    uint8_t receivedCHK = servoCom.read();
+    uint8_t receivedEOT = servoCom.read();
+    
+    hostCom.printf(" Received CHK: 0x%02X, EOT: 0x%02X\n", receivedCHK, receivedEOT);
+    hostCom.print(" CRC calc for EOT: ");
+    hostCom.print(CRC_calc((const char[]){ EOT, '\0' }), HEX);
+    hostCom.println();
+
+    // char checksum = CRC_calc((const char[]){ EOT, '\0' });
+
+     // check that this really was a valid response
+    return (receivedCHK == CRC_calc((const char[]){ EOT, '\0' })) && (receivedEOT == EOT);
+}
+
+void ServoCIEData::setComOpen(bool state) {
+    comOpen = state;
+}
+
+bool ServoCIEData::isComOpen() const {
+    return comOpen;
+}
+
+void ServoCIEData::setLastInitAttempt(unsigned long timestamp) {
+    lastInitAttempt = timestamp;
+}
+
+unsigned long ServoCIEData::getLastInitAttempt() const {
+    return lastInitAttempt;
+}
+
+void ServoCIEData::setLastMessageTime(unsigned long timestamp) {
+    lastMessageTime = timestamp;
+}
+
+unsigned long ServoCIEData::getLastMessageTime() const {
+    return lastMessageTime;
 }
 
 
@@ -415,12 +474,24 @@ void ServoCIEData::CIE_setup() {
     strcpy(CMD_RADAS, "RADAS");
     strcpy(CMD_RADC, "RADC");
 
-    servoCom.write(EOT);
-    getCIEResponse();
+    // servoCom.write(EOT);
+    // getCIEResponse();
 
-    servoCom.write(ESC);
-    getCIEResponse();
+    // servoCom.write(ESC);
+    // getCIEResponse();
+    
+    if (CIE_comCheck()) {
+        hostCom.println(" CIE communication OK");
+        setComOpen(true);
+        setLastInitAttempt(millis());
+        setLastMessageTime(millis());
 
+    } else {
+        hostCom.println(" CIE communication FAILED");
+        setComOpen(false);
+        setLastInitAttempt(millis());
+    }
+    
     // get SERVO ventilator clock:
     Send_SERVO_CMD(CMD_RTIM);
     getCIEResponse(); // manage the response as well:
