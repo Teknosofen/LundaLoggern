@@ -8,6 +8,10 @@
 #include <string>
 #include "DateTime.hpp"
 
+
+// when in stdvy, the CIE does not send any data, so we need to poll it
+// there seems to be an err message sent that could deserve a dedicated state?
+
 // #define hostCom Serial          // potential duplicate
 
 // new 2025-08-04
@@ -284,12 +288,17 @@ private:
     // -------------
     #define EOT 0x04  // end of text
     #define ESC 0x1B  // escape char
-    #define CR 0x0D   // CR char
-    #define LF 0x0A   // LF char
+    #define CR  0x0D   // CR char
+    #define LF  0x0A   // LF char
     #define ValueFlag 0x80  // 
     #define PhaseFlag 0x81  //
     #define ErrorFlag 0xE0  //
     #define EndFlag   0x7F  //
+
+    #define StdbyErr    0x11 // error code sent when in stdby
+    #define BuffFullErr 0x13 // error code sent when buffer is full
+    #define ESCErr      0x14 // error code sent when transmission stopped by ESC
+    
 
     #define cieDataInvalid 0x7EFF  // 0x7EFF,= 32511 flags that cie data is not available or invalid
     #define cieEIPInvalid 3000.0 // limit just below a scaled version of the 0x7EFF

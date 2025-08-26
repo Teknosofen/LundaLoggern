@@ -253,10 +253,23 @@ void ServoCIEData::parseCIEData(char NextSCI_chr) {
             RunMode = End_Flag_Found;
             break;
         case Error_Data:
+            // look carefully at this, this is where the binary err code errflag_11 can be caught
             if (NextSCI_chr == EndFlag) {
                 RunMode = End_Flag_Found;
             } else {
                 Error_info = NextSCI_chr;
+                if (Error_info = StdbyErr) {
+                    hostCom.println(" CIE in stdby");
+                    setComOpen(false);      // in stdby, no data is sent, so we consider com lost
+                    // add also a dedicated method or parameter to signal dev in stdby?
+                } else if (Error_info = BuffFullErr) {
+                    hostCom.println(" CIE buffer full");
+                } else if (Error_info = ESCErr) {
+                    hostCom.println(" CIE transmission stopped by ESC");
+                } else {
+                    hostCom.print(" CIE error code: ");
+                    hostCom.println(Error_info);
+                }                // err code detection here
             }
             break;
         case Run_Mode:
