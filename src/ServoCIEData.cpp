@@ -383,6 +383,7 @@ DateTime ServoCIEData::parseRTIMResponse(const char* response, size_t len) {
     // Expect 14 digits + 1 CRC (no EOT)
     if (len < 15) return DateTime(); // invalid
 
+    
     // timeData must be null-terminated for CRC_calc
     char timeData[15];
     memcpy(timeData, response, 14);
