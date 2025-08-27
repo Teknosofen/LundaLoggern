@@ -28,3 +28,34 @@ String DateTime::rawString() const {
              _year, _month, _day, _hour, _minute, _second);
     return String(buf);
 }
+
+
+// new 2025-09-27
+// RTC Integration
+void DateTime::setRTC() const {
+    struct tm timeinfo;
+    timeinfo.tm_year = _year - 1900;
+    timeinfo.tm_mon  = _month - 1;
+    timeinfo.tm_mday = _day;
+    timeinfo.tm_hour = _hour;
+    timeinfo.tm_min  = _minute;
+    timeinfo.tm_sec  = _second;
+    time_t t = mktime(&timeinfo);
+    struct timeval now = { .tv_sec = t };
+    settimeofday(&now, nullptr);
+}
+
+void DateTime::readRTC() {
+    struct tm timeinfo;
+    if (!getLocalTime(&timeinfo)) {
+        _valid = false;
+        return;
+    }
+    _year   = timeinfo.tm_year + 1900;
+    _month  = timeinfo.tm_mon + 1;
+    _day    = timeinfo.tm_mday;
+    _hour   = timeinfo.tm_hour;
+    _minute = timeinfo.tm_min;
+    _second = timeinfo.tm_sec;
+    _valid  = true;
+}

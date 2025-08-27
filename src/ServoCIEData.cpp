@@ -344,17 +344,18 @@ void ServoCIEData::Send_SERVO_CMD(const char* InStr) {
     servoCom.print(InStr);
     if (CRC < 0x10) {
         servoCom.print("0");
+    } else {
+        servoCom.write(CRC);          // Send raw CRC byte
     }
-    servoCom.write(CRC);          // Send raw CRC byte
     servoCom.write(EOT);          // Send EOT
 
     // hostCom.print(InStr);
     hostCom.printf("CRC for %s = 0x%02X\n", InStr, CRC);
-
 }
 
 
-void ServoCIEData::getCIEResponse() {
+String ServoCIEData::getCIEResponse() {
+    String response = "";
     delay(30);
     while (servoCom.available()) {
         hostCom.print(" trying to get some CIE data");
@@ -365,8 +366,10 @@ void ServoCIEData::getCIEResponse() {
         hostCom.print(inByte, HEX);
         hostCom.print(' ');
         if (inByte == EOT) break;
+        response += (char)inByte;  // Append character to response
     }
     hostCom.println(" no more CIE data available to receive");
+    return response;
 }
 
 // Assumes: CRC_calc(const char* nullTerminated) is available
@@ -383,7 +386,6 @@ DateTime ServoCIEData::parseRTIMResponse(const char* response, size_t len) {
     // Expect 14 digits + 1 CRC (no EOT)
     if (len < 15) return DateTime(); // invalid
 
-    
     // timeData must be null-terminated for CRC_calc
     char timeData[15];
     memcpy(timeData, response, 14);
@@ -464,9 +466,8 @@ unsigned long ServoCIEData::getLastMessageTime() const {
     return lastMessageTime;
 }
 
-
 // 2025-08-09:
-void ServoCIEData::CIE_setup() {
+bool ServoCIEData::CIE_setup() {
     strcpy(CMD_RTIM, "RTIM");
     strcpy(CMD_RCTY, "RCTY");
 
@@ -488,9 +489,6 @@ void ServoCIEData::CIE_setup() {
     strcpy(CMD_RADAS, "RADAS");
     strcpy(CMD_RADC, "RADC");
 
-    // servoCom.write(EOT);
-    // getCIEResponse();
-
     // servoCom.write(ESC);
     // getCIEResponse();
     
@@ -499,16 +497,17 @@ void ServoCIEData::CIE_setup() {
         setComOpen(true);
         setLastInitAttempt(millis());
         setLastMessageTime(millis());
-
     } else {
         hostCom.println(" CIE communication FAILED");
         setComOpen(false);
         setLastInitAttempt(millis());
+        return false; 
     }
     
     // get SERVO ventilator clock:
     Send_SERVO_CMD(CMD_RTIM);
-    getCIEResponse(); // manage the response as well:
+    String rtimResponse = getCIEResponse();
+    parseRTIMResponse(rtimResponse.c_str(), rtimResponse.length()); // manage the response as well:
 
     Send_SERVO_CMD(CMD_RCTY);
     getCIEResponse();
@@ -535,9 +534,11 @@ void ServoCIEData::CIE_setup() {
     getCIEResponse();
     
     Send_SERVO_CMD(CMD_RADC);
-    hostCom.println(" CIE setup almost complete");
+    
     getCIEResponse();
     hostCom.print("\nCIE setup complete");
+    
+    return true;
 }
 
 

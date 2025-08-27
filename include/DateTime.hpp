@@ -34,6 +34,10 @@ public:
     // Raw compact form: "YYYYMMDDhhmmss"
     String rawString() const;
 
+    // RTC Integration
+    void setRTC() const;
+    void readRTC();
+
 private:
     int  _year{0};
     int  _month{0};
