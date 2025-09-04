@@ -1,9 +1,8 @@
 
 #pragma once
 #include <TFT_eSPI.h>
+#include "DateTime.hpp"
 
-#pragma once
-#include <TFT_eSPI.h>
 
 class ImageRenderer {
 public:
@@ -15,40 +14,16 @@ public:
   void drawSwatch(int x, int y, uint16_t color, const char *label, bool  rounded = false);
   void drawSDStatusIndicator(bool isPresent);
 
+  void begin();                     // Initialize display
+  void clear();                     // Clear screen
+  void drawDateTimeAt(const DateTime& dt, int x, int y, int spacing = 20); // Draw date/time at position
+  void drawMainScreen();        // Draw main screen layout
+  void setTextSize(int size) { tft.setTextSize(size); } // Set text size
+  void drawString(const String& text, int x, int y, int font = 2);
+  void drawString(const char* text, int x, int y, int font = 2);
+
 private:
   TFT_eSPI &tft;
+  void drawCenteredText(const String& text, int y); // Optional helper
+
 };
-
-
-
-
-// class ImageRenderer {
-// public:
-//   ImageRenderer(TFT_eSPI &display) : tft(display) {}
-
-//   void drawImage(int x, int y, int w, int h, const uint16_t *img) {
-//     tft.startWrite();
-//     for (int row = 0; row < h; row++) {
-//       for (int col = 0; col < w; col++) {
-//         uint16_t color = img[row * w + col];
-//         tft.drawPixel(x + col, y + row, color);
-//       }
-//     }
-//     tft.endWrite();
-//   }
-
-//   // Optional: use pushImage for faster rendering when possible
-//   void pushFullImage(int x, int y, int w, int h, const uint16_t *img) {
-//     tft.pushImage(x, y, w, h, img);
-//   }
-
-//   void ImageRenderer::drawSwatch(int x, int y, int width, int height, uint16_t color, const char* label) {
-//   tft.fillRect(x, y, width, height, color);
-//   tft.setTextColor(TFT_WHITE, color); // White text on color background
-//   tft.setCursor(x + 5, y + (height / 2) - 8); // Vertically center the text
-//   tft.print(label);
-// }
-// '
-// private:
-//   TFT_eSPI &tft;
-// };

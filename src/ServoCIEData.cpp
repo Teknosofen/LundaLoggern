@@ -1,4 +1,5 @@
 #include "ServoCIEData.hpp"
+#include "DateTime.hpp"
 
 ServoCIEData::ServoCIEData() 
     : RunMode(Awaiting_Info), ByteCount(0), MetricNo(0), settingsNo(0) {
@@ -507,7 +508,9 @@ bool ServoCIEData::CIE_setup() {
     // get SERVO ventilator clock:
     Send_SERVO_CMD(CMD_RTIM);
     String rtimResponse = getCIEResponse();
-    parseRTIMResponse(rtimResponse.c_str(), rtimResponse.length()); // manage the response as well:
+    DateTime dt = parseRTIMResponse(rtimResponse.c_str(), rtimResponse.length());
+    DateTime::setRTC(dt); // Static call, only sets if valid
+    // if dt is invalid, RTC is not changed
 
     Send_SERVO_CMD(CMD_RCTY);
     getCIEResponse();

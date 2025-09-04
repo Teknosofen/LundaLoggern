@@ -39,7 +39,9 @@ public:
 
     // RTC Integration
     void setRTC() const;
+    static void setRTC(const DateTime& dt); // NEW
     void readRTC();
+    static DateTime getRTC();               // NEW
 
 private:
     int  _year{0};

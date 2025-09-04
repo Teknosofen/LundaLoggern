@@ -105,9 +105,6 @@ public:
     String getScaledValuesAsString(const float* scaledArray, int count);
     String getChannelsAsString(const Configs* configsArray, int count);
 
-
-
-
 private:
     // communication timing stuff
     bool comOpen = false;

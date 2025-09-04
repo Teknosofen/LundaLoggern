@@ -3,6 +3,70 @@
 
 ImageRenderer::ImageRenderer(TFT_eSPI &display) : tft(display) {}
 
+void ImageRenderer::begin() {
+    tft.init();
+    tft.setRotation(1); // Set display orientation
+    
+    tft.fillScreen(TFT_LOGOBACKGROUND); // Clear the display
+    tft.setTextColor(TFT_WHITE, TFT_LOGOBACKGROUND  ); // Set text color and background
+    tft.setTextSize(2); // Set text size
+    tft.setCursor(10, 10); // Set cursor position
+    tft.println("LundaLogger Ready"); // Print a message on the display
+    delay(1000); // Delay to allow the display to show the message
+    // tft.setTextDatum(TL_DATUM);  // Top-left for manual positioning
+    pushFullImage(220, 40, 100, 100, lundaLogo);
+}
+    
+void ImageRenderer::clear() {
+    tft.fillScreen(TFT_LOGOBACKGROUND);
+}
+
+void ImageRenderer::drawMainScreen() {
+  /// screen gfx stuff
+    tft.setFreeFont(FSSB24);    
+    tft.setTextColor(TFT_DEEPBLUE, TFT_LOGOBACKGROUND); // Set text color and background
+    // tft.setTextSize(2); // Set text size
+    tft.setCursor(10, 10); // Set cursor position
+    tft.drawString("LundaLogger", 10, 10); // Print a message on the display
+    tft.setCursor(10, 50); // Set cursor position for next line
+    tft.setTextSize(1); // Set text size for the next line
+};
+
+void ImageRenderer::drawString(const String& text, int x, int y, int font) {
+    tft.drawString(text, x, y, font);
+}
+
+void ImageRenderer::drawString(const char* text, int x, int y, int font) {
+    drawString(String(text), x, y, font);  // Delegate to String version
+}
+
+void ImageRenderer::drawCenteredText(const String& text, int y) {
+    int x = (tft.width() - tft.textWidth(text)) / 2;
+    tft.drawString(text, x, y);
+}
+
+void ImageRenderer::drawDateTimeAt(const DateTime& dt, int x, int y, int spacing) {
+    if (!dt.isValid()) {
+        tft.setCursor(x, y);
+        tft.print("Invalid Time");
+        return;
+    }
+
+    String dateStr = String(dt.year()) + "-" +
+                     String(dt.month()) + "-" +
+                     String(dt.day());
+
+    String timeStr = String(dt.hour()) + ":" +
+                     (dt.minute() < 10 ? "0" : "") + String(dt.minute()) + ":" +
+                     (dt.second() < 10 ? "0" : "") + String(dt.second());
+
+    tft.setCursor(x, y);
+    tft.print(dateStr);
+
+    tft.setCursor(x, y + spacing);
+    tft.print(timeStr);
+}
+
 void ImageRenderer::drawImage(int x, int y, int w, int h, const uint16_t *img) {
   tft.startWrite();
   for (int row = 0; row < h; row++) {

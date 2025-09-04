@@ -59,3 +59,15 @@ void DateTime::readRTC() {
     _second = timeinfo.tm_sec;
     _valid  = true;
 }
+
+void DateTime::setRTC(const DateTime& dt) {
+    if (dt.isValid()) {
+        dt.setRTC();
+    }
+}
+
+DateTime DateTime::getRTC() {
+    DateTime dt;
+    dt.readRTC();
+    return dt;
+}
