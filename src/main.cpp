@@ -78,8 +78,10 @@ void setup() {
    } else {
       hostCom.println("✅ SPIFFS mounted successfully");
   }
- 
+  
+  hostCom.println("Initializing CIE configs:");
   servoCIEData.initializeConfigs(MetricConfigPath, SettingConfigPath);
+  hostCom.println("Initializing CIE com:");
   servoCIEData.begin();
 
   // WiFiserver.setLogoData(lundaLogo, 100, 100);
@@ -123,6 +125,7 @@ void loop() {
     renderer.drawString(WiFiserver.getApIpAddress(), 10, 50, 2); // Print another message on the display
     renderer.drawDateTimeAt(dateTime.getRTC(), 10, 160); // Draw current RTC time
     renderer.drawServoID(servoCIEData.getServoID(), 10, 140);
+    renderer.drawCOMStatusIndicator(servoCIEData.isComOpen());
 
     if (sd.updateCardStatus()) {
       hostCom.println("🔄 SD status changed!");
@@ -133,8 +136,7 @@ void loop() {
     }
 
     // renderer.pushFullImage(220, 40, 100, 100, lundaLogo);
-    hostCom.println("looping..."); // Print a message to the host serial port
-
+    hostCom.print("."); // Print a message to the host serial port
   }
 
   // check for serial data from CIE and ventilator
@@ -161,7 +163,8 @@ void loop() {
   }
 
   if (servoCom.available()) {
-    char inByte = servoCom.read();                               // get the byte from the ventilator or cpno PC
+    char inByte = servoCom.read();                               // get the byte from the ventilator 
+    hostCom.print(inByte);
     servoCIEData.parseCIEData(inByte);
   }
 

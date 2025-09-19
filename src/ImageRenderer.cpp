@@ -185,6 +185,44 @@ void ImageRenderer::drawSDStatusIndicator(bool isPresent) {
 
 }
 
+void ImageRenderer::drawCOMStatusIndicator(bool isPresent) {
+  const uint16_t color     = isPresent ? 0x07E0 : 0xF800;  // Green or Red
+  const uint16_t backColor = isPresent ? 0x0330 : 0x4000;  // Dark Green or Dark Red
+  const char* label        = isPresent ? "COM OK" : "COM FAIL";
+
+  // 🔧 Backup current font settings
+  // const GFXfont* prevFont = tft.getFreeFont();
+  uint8_t        prevDatum    = tft.getTextDatum();
+  uint16_t       prevFGColor  = tft.textcolor;
+  uint16_t       prevBGColor  = tft.textbgcolor;
+
+  // 🖋️ Apply swatch-specific font settings
+  tft.setFreeFont(FSSB9);                    // Larger, readable font
+  tft.setTextColor(color, backColor);        // Foreground & background
+  tft.setTextDatum(MC_DATUM);                // Middle Center alignment
+
+  int textWidth  = tft.textWidth("COM FAIL"); // adopt to the longest message
+  int textHeight = tft.fontHeight();         // Font height
+  const int paddingX = 4;
+  const int paddingY = 4;
+
+  int boxWidth  = textWidth + paddingX * 2;
+  int boxHeight = textHeight + paddingY * 2;
+
+  int x = 10; //         // left-aligned
+  int y = 90;                                // Position under logo
+  int cx = x + boxWidth / 2;
+  int cy = y + boxHeight / 2;
+
+  tft.fillRoundRect(x, y, boxWidth, boxHeight, 5, backColor);
+  tft.drawString(label, cx, cy);             // Centered text
+
+  // 🔄 Restore previous font settings
+  // tft.setFreeFont(prevFont);
+  tft.setTextDatum(prevDatum);
+  tft.setTextColor(prevFGColor, prevBGColor);
+
+}
 // void ImageRenderer::drawSDStatusIndicator(bool isPresent) {  
 //     const uint16_t color     = isPresent ? 0x07E0 : 0xF800; // Green or Red
 //     const uint16_t BackColor = isPresent ? 0x0330 : 0x4000; // contrasting Green or Red

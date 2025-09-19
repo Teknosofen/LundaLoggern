@@ -9,11 +9,20 @@ ServoCIEData::ServoCIEData()
 
 bool ServoCIEData::begin() {
     hostCom.println("ServoCIEData begin called");
+
+    servoCom.write(ESC); // stop any ongoing communication
+    hostCom.printf("Flushed after ESC: ");
+    while (servoCom.available() > 0) {
+        uint8_t b = servoCom.read();
+        // hostCom.printf(" %s 0x%02X ", b, b);
+    }
+    hostCom.println("");
     CIE_setup();
     return true;
 }
 
 void ServoCIEData::parseCIEData(char NextSCI_chr) {
+    hostCom.print(NextSCI_chr, HEX);
     switch (RunMode) {
         case Awaiting_Info:
             switch (NextSCI_chr) {
@@ -87,6 +96,13 @@ void ServoCIEData::parseCIEData(char NextSCI_chr) {
                 //     metrics[metricCount].scaled = (1 - cieTi2Ttot) * 60 / cieRR; // calcExpTime
                 //     metrics[metricCount+1].scaled = cieTi2Ttot * 60 / cieRR;     // calcInspTime
                 // }
+
+                String tempStr = dateTime.getRTC().toString() + " ";
+                for (int i = 0; i < MetricNo; i++) {
+                    tempStr += String(metrics[i].scaled, 2) + "\t";
+                }
+                tempStr += "\n";
+                hostCom.println(tempStr);
 
                 RunMode = End_Flag_Found;
             } else {
@@ -397,14 +413,12 @@ String ServoCIEData::parseASCIIResponse(const char* response, size_t len, bool* 
         if (statusError) *statusError = true;
         return "";
     }
-
     // Check EOT
     if (response[len - 1] != EOT) {
         hostCom.println("Response missing EOT");
         if (statusError) *statusError = true;
         return "";
     }
-
     // Extract CRC from last 3rd and 2nd bytes
     char receivedCRCstr[3] = { response[len - 3], response[len - 2], '\0' };
     uint8_t receivedCRC = (uint8_t)strtol(receivedCRCstr, nullptr, 16);
@@ -414,7 +428,7 @@ String ServoCIEData::parseASCIIResponse(const char* response, size_t len, bool* 
     char data[dataLen + 1];
     memcpy(data, response, dataLen);
     data[dataLen] = '\0';
-    hostCom.printf("Debug ascii data: %S\n", data);
+    // hostCom.printf("Debug ascii data: %s\n", data);
 
     uint8_t computedCRC = CRC_calc(data);
     if (computedCRC != receivedCRC) {
@@ -437,7 +451,6 @@ String ServoCIEData::parseASCIIResponse(const char* response, size_t len, bool* 
 DateTime ServoCIEData::parseRTIMResponse(const char* response, size_t len) {
     bool crcError = false;
     String timeData = parseASCIIResponse(response, len, &crcError);
-    hostCom.printf("DEBUG timeData %s\n", timeData);
     if (crcError || timeData.length() != 14) return DateTime(); // invalid
 
     int year   = parse4(timeData.c_str() + 0);
@@ -448,8 +461,7 @@ DateTime ServoCIEData::parseRTIMResponse(const char* response, size_t len) {
     int second = parse2(timeData.c_str() +12);
 
     DateTime dt(year, month, day, hour, minute, second, true);
-    hostCom.printf("Parsed RTIM: %s\n", dt.toString());
-    hostCom.printf("SERVO time: %s", dt.toString());
+    hostCom.printf("SERVO time: %s\n", dt.toString().c_str());
     dt.setRTC();
     return dt;
 }
@@ -467,14 +479,14 @@ void ServoCIEData::parseRCTYResponse(const char* response, size_t len) {
     
     if (statusError) hostCom.println("Device reported internal communication error");
     
-    hostCom.printf("Parsed RCTY: servoID = %s\n", servoID.c_str());
+    hostCom.printf("servoID = %s\n", servoID.c_str());
 }
 
 // RSN
 void ServoCIEData::parseRSENResponse(const char* response, size_t len) {
     bool dummyError = false;
     servoSN = parseASCIIResponse(response, len, &dummyError);
-    hostCom.printf("Parsed RSN: servoSN = %s\n", servoSN.c_str());
+    hostCom.printf("servo S/N = %s\n", servoSN.c_str());
 }
 
 String ServoCIEData::getServoID() {
@@ -579,26 +591,21 @@ unsigned long ServoCIEData::getLastMessageTime() const {
 
 // 2025-08-09:
 bool ServoCIEData::CIE_setup() {
-    strcpy(CMD_RTIM, "RTIM");
-    strcpy(CMD_RCTY, "RCTY");
-    strcpy(CMD_RSEN, "RSEN");
-    strcpy(CMD_SDADB, "SDADB");
-    // strcpy(PAYLOAD_SDADB, "113114117100102101103104109108107122105106128");
+    strcpy(CMD_RTIM,  "RTIM");
+    strcpy(CMD_RCTY,  "RCTY");
+    strcpy(CMD_RSEN,  "RSEN");
+    strcpy(CMD_SDADB, "SDADB");     // strcpy(PAYLOAD_SDADB, "113114117100102101103104109108107122105106128");
     strcat(CMD_SDADB, concatConfigChannels(metrics, metricCount).c_str());  // Append PAYLOAD_SDADB to CMD_SDADB
-
-    // strcpy(PAYLOAD_SDADS, "400405408414406420410409437419");
-    strcpy(CMD_SDADS, "SDADS");
+    strcpy(CMD_SDADS, "SDADS"); // strcpy(PAYLOAD_SDADS, "400405408414406420410409437419");
     strcat(CMD_SDADS, concatConfigChannels(settings, settingCount).c_str());  // Append PAYLOAD_SDADB to CMD_SDADB
-
     strcpy(PAYLOAD_SDADC, "000004001");
     strcpy(CMD_SDADC, "SDADC");
     strcat(CMD_SDADC, PAYLOAD_SDADC);  // Append PAYLOAD_SDADC to CMD_SDADC
-
-    strcpy(CMD_RCCO, "RCCO102");
-    strcpy(CMD_RDAD, "RDAD");
+    strcpy(CMD_RCCO,  "RCCO102");
+    strcpy(CMD_RDAD,  "RDAD");
     strcpy(CMD_RADAB, "RADAB");
     strcpy(CMD_RADAS, "RADAS");
-    strcpy(CMD_RADC, "RADC");
+    strcpy(CMD_RADC,  "RADC");
 
     // servoCom.write(ESC);
     // getCIEResponse();
@@ -636,14 +643,17 @@ bool ServoCIEData::CIE_setup() {
     Send_SERVO_CMD_ASCII(CMD_SDADS);
     getCIEResponse();
 
-    Send_SERVO_CMD_ASCII(CMD_SDADC);
-    getCIEResponse();
+    // Curve channels
+    // Send_SERVO_CMD_ASCII(CMD_SDADC);
+    // getCIEResponse();
 
-    Send_SERVO_CMD_ASCII(CMD_RCCO);
-    getCIEResponse();
+    // read config
+    // Send_SERVO_CMD_ASCII(CMD_RCCO);
+    // getCIEResponse();
 
-    Send_SERVO_CMD_ASCII(CMD_RDAD);
-    getCIEResponse();
+    // read config
+    // Send_SERVO_CMD_ASCII(CMD_RDAD);
+    // getCIEResponse();
 
     Send_SERVO_CMD_ASCII(CMD_RADAB);
     getCIEResponse();
@@ -655,6 +665,7 @@ bool ServoCIEData::CIE_setup() {
     
     getCIEResponse();
     hostCom.print("\nCIE setup complete");
+    setLastMessageTime(millis());
     
     return true;
 }

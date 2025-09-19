@@ -8,6 +8,7 @@
 #include <string>
 #include "DateTime.hpp"
 
+extern DateTime dateTime;
 
 // when in stdvy, the CIE does not send any data, so we need to poll it
 // there seems to be an err message sent that could deserve a dedicated state?

@@ -13,6 +13,7 @@ public:
   void drawSwatch(int x, int y, int width, int height, uint16_t color, const char *label);
   void drawSwatch(int x, int y, uint16_t color, const char *label, bool  rounded = false);
   void drawSDStatusIndicator(bool isPresent);
+  void drawCOMStatusIndicator(bool isPresent);
 
   void begin();                     // Initialize display
   void clear();                     // Clear screen
