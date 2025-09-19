@@ -15,6 +15,8 @@ public:
 
   bool writeTextFile(const char* path, const String& content);
   bool appendTextFile(const char* path, const String& content);
+  void listRoot();
+
   enum SDState {
     SD_IDLE,
     SD_BUSY,

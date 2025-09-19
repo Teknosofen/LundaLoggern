@@ -49,12 +49,23 @@ public:
     bool begin();
     void parseCIEData(char NextSCI_chr);
     String getCIEResponse();
+
+    // --- Parsers ---
     DateTime parseRTIMResponse(const char* response, size_t len);
+    void parseRCTYResponse(const char* response, size_t len);
+    void parseRSENResponse(const char* response, size_t len);
+
     bool CIE_comCheck();
     bool CIE_setup();
+    
+    // --- Command sending ---
     void Send_SERVO_CMD(const char* InStr);
-    char CRC_calc(const char* localstring);
-    // void ScaleMetrics();
+    void Send_SERVO_CMD_ASCII(const char* InStr);
+
+        // --- CRC ---
+    uint8_t CRC_calc(const char* localstring);
+    void CRC_calcASCII(const char* localstring, char* outHex); // New CRC function: returns 2 ASCII hex characters via outHex
+   
     String concatConfigChannels(const Configs configs[], int numConfigs);
     void initializeConfigs(const char* metricPath, const char* settingPath);
    
@@ -105,6 +116,8 @@ public:
     String getScaledValuesAsString(const float* scaledArray, int count);
     String getChannelsAsString(const Configs* configsArray, int count);
 
+    String getServoID();    // returns servo type and serial num
+
 private:
     // communication timing stuff
     bool comOpen = false;
@@ -113,6 +126,13 @@ private:
 
     bool parseMetricLine(const String& line, Configs& m);
     bool parseSettingLine(const String& line, Configs& s);
+
+    // Generic ASCII response parser with optional status flag
+    String parseASCIIResponse(const char* response, size_t len, bool* statusError = nullptr);
+    
+    // Parsed device info
+    String servoID = "";  // from RCTY
+    String servoSN = "";  // from RSN
 
     enum RunModeType {
         Awaiting_Info,
@@ -136,6 +156,7 @@ private:
     // Mutable buffers for command strings
     char CMD_RTIM[8];
     char CMD_RCTY[8];
+    char CMD_RSEN[8];
     char CMD_SDADB[64];
     char PAYLOAD_SDADB[64];
     char PAYLOAD_SDADS[64];

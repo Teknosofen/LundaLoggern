@@ -9,11 +9,6 @@ ServoCIEData::ServoCIEData()
 
 bool ServoCIEData::begin() {
     hostCom.println("ServoCIEData begin called");
-    // if (!SPIFFS.begin(true)) {
-    //     hostCom.println("⚠️ SPIFFS Mount Failed");
-    //     return false;
-    // }
-    // hostCom.println("✔️ SPIFFS Mounted Successfully");
     CIE_setup();
     return true;
 }
@@ -317,20 +312,8 @@ void ServoCIEData::parseCIEData(char NextSCI_chr) {
     }
 }
 
-// void ServoCIEData::ScaleMetrics() {
-//     for (int i = 0; i < NumMetrics; i++) {
-//         MetricScaled[i] = MetricUnscaled[i] * MetricScaleFactors[i] - MetricOffset[i];
-//         hostCom.print(MetricLabels[i]);
-//         hostCom.print(" = ");
-//         hostCom.print(MetricScaled[i]);
-//         hostCom.print(" ");
-//         hostCom.println(MetricUnits[i]);
-//     }
-//     hostCom.println();
-// }
-
 // remoed use of String
-char ServoCIEData::CRC_calc(const char* localstring) {
+uint8_t ServoCIEData::CRC_calc(const char* localstring) {
     char chk = 0;
     for (size_t i = 0; localstring[i] != '\0'; i++) {
         chk ^= localstring[i];
@@ -338,6 +321,12 @@ char ServoCIEData::CRC_calc(const char* localstring) {
     return chk;
 }
 
+// New CRC: returns 2 ASCII hex characters in output buffer
+void ServoCIEData::CRC_calcASCII(const char* localstring, char* outHex) {
+    uint8_t chk = CRC_calc(localstring);  // compute XOR of all bytes
+    // Convert to 2-character ASCII hex string
+    snprintf(outHex, 3, "%02X", chk);     // outHex[0..1] = hex chars, outHex[2] = '\0'
+}
 
 // removed use of String
 void ServoCIEData::Send_SERVO_CMD(const char* InStr) {
@@ -354,22 +343,39 @@ void ServoCIEData::Send_SERVO_CMD(const char* InStr) {
     hostCom.printf("CRC for %s = 0x%02X\n", InStr, CRC);
 }
 
+// Send command with ASCII CRC (2 hex chars) + EOT
+void ServoCIEData::Send_SERVO_CMD_ASCII(const char* InStr) {
+    char crcStr[3];                  // 2 ASCII chars + null terminator
+    CRC_calcASCII(InStr, crcStr);    // compute CRC and convert to ASCII
+
+    // Send command string
+    servoCom.print(InStr);
+
+    // Send ASCII CRC characters
+    servoCom.print(crcStr);
+
+    // Send EOT
+    servoCom.write(EOT);
+
+    // Log
+    hostCom.printf("Sent command: %s, CRC ASCII: %s\n", InStr, crcStr);
+}
 
 String ServoCIEData::getCIEResponse() {
     String response = "";
     delay(30);
+    hostCom.print("CIE data: ");
     while (servoCom.available()) {
-        hostCom.print(" trying to get some CIE data");
         inByte = servoCom.read();
-        hostCom.print(' ');
         hostCom.print(inByte);
-        hostCom.print(' ');
+        hostCom.print(" (0x");
         hostCom.print(inByte, HEX);
-        hostCom.print(' ');
-        if (inByte == EOT) break;
+        hostCom.print(") ");
         response += (char)inByte;  // Append character to response
+        if (inByte == EOT) break;
+        // response += (char)inByte;  // Append character to response
     }
-    hostCom.println(" no more CIE data available to receive");
+    hostCom.println(" All CIE data received");
     return response;
 }
 
@@ -383,64 +389,168 @@ static inline int parse4(const char* p) {
     return (p[0]-'0')*1000 + (p[1]-'0')*100 + (p[2]-'0')*10 + (p[3]-'0');
 }
 
+// Generic parser for ASCII response with 2-char CRC and EOT
+// Returns empty string if invalid
+String ServoCIEData::parseASCIIResponse(const char* response, size_t len, bool* statusError) {
+    if (len < 4) { // at least 1 byte data + 2 CRC + 1 EOT
+        hostCom.println("Response too short");
+        if (statusError) *statusError = true;
+        return "";
+    }
+
+    // Check EOT
+    if (response[len - 1] != EOT) {
+        hostCom.println("Response missing EOT");
+        if (statusError) *statusError = true;
+        return "";
+    }
+
+    // Extract CRC from last 3rd and 2nd bytes
+    char receivedCRCstr[3] = { response[len - 3], response[len - 2], '\0' };
+    uint8_t receivedCRC = (uint8_t)strtol(receivedCRCstr, nullptr, 16);
+
+    // Data portion: everything except last 3 bytes (CRC + EOT)
+    size_t dataLen = len - 3;
+    char data[dataLen + 1];
+    memcpy(data, response, dataLen);
+    data[dataLen] = '\0';
+    hostCom.printf("Debug ascii data: %S\n", data);
+
+    uint8_t computedCRC = CRC_calc(data);
+    if (computedCRC != receivedCRC) {
+        hostCom.printf("CRC mismatch! expected %02X, got %s\n", computedCRC, receivedCRCstr);
+        if (statusError) *statusError = true;
+        return "";
+    }
+
+    // Optional: check status for commands that include a status byte as last data char
+    if (statusError && dataLen > 1) {
+        char statusChar = data[dataLen - 1];
+        *statusError = (statusChar == '1'); // true if error
+    }
+
+    // Return data string excluding last status char if applicable
+    return String(data, dataLen); //  - (statusError ? 1 : 0));
+}
+
+// RTIM
 DateTime ServoCIEData::parseRTIMResponse(const char* response, size_t len) {
-    // Expect 14 digits + 1 CRC (no EOT)
-    if (len < 15) return DateTime(); // invalid
+    bool crcError = false;
+    String timeData = parseASCIIResponse(response, len, &crcError);
+    hostCom.printf("DEBUG timeData %s\n", timeData);
+    if (crcError || timeData.length() != 14) return DateTime(); // invalid
 
-    // timeData must be null-terminated for CRC_calc
-    char timeData[15];
-    memcpy(timeData, response, 14);
-    timeData[14] = '\0';
+    int year   = parse4(timeData.c_str() + 0);
+    int month  = parse2(timeData.c_str() + 4);
+    int day    = parse2(timeData.c_str() + 6);
+    int hour   = parse2(timeData.c_str() + 8);
+    int minute = parse2(timeData.c_str() +10);
+    int second = parse2(timeData.c_str() +12);
 
-    char receivedCRC = response[14];
-    char computedCRC = CRC_calc(timeData);
-    if (computedCRC != receivedCRC) return DateTime(); // invalid
+    DateTime dt(year, month, day, hour, minute, second, true);
+    hostCom.printf("Parsed RTIM: %s\n", dt.toString());
+    hostCom.printf("SERVO time: %s", dt.toString());
+    dt.setRTC();
+    return dt;
+}
 
-    // Fast fixed-width parsing
-    int year   = parse4(timeData + 0);
-    int month  = parse2(timeData + 4);
-    int day    = parse2(timeData + 6);
-    int hour   = parse2(timeData + 8);
-    int minute = parse2(timeData +10);
-    int second = parse2(timeData +12);
+// RCTY
+void ServoCIEData::parseRCTYResponse(const char* response, size_t len) {
+    bool statusError = false;
+    servoID = parseASCIIResponse(response, len, &statusError);
 
-    return DateTime(year, month, day, hour, minute, second, true);
+    // If we used statusError flag, the last char in servoID is the status.
+    // Replace it with a space.
+    if (servoID.length() > 0) {
+        servoID.setCharAt(servoID.length() - 1, ' ');
+    }
+    
+    if (statusError) hostCom.println("Device reported internal communication error");
+    
+    hostCom.printf("Parsed RCTY: servoID = %s\n", servoID.c_str());
+}
+
+// RSN
+void ServoCIEData::parseRSENResponse(const char* response, size_t len) {
+    bool dummyError = false;
+    servoSN = parseASCIIResponse(response, len, &dummyError);
+    hostCom.printf("Parsed RSN: servoSN = %s\n", servoSN.c_str());
+}
+
+String ServoCIEData::getServoID() {
+    return servoID + servoSN;
 }
 
 bool ServoCIEData::CIE_comCheck() {
-    // 2.4.1 Empty command  
-    // The empty command can be used for connection check. 
-    // Input syntax:  <EOT> 
-    // Output syntax: *<CHK><EOT>  
+    // Send:   <EOT>
+    // Expect: *<CHK><EOT>
+    //   - '*'   = start marker (literal 0x2A)
+    //   - <CHK> = XOR of '*' (so just '*')
+    //   - <EOT> = echo of EOT
 
-    const unsigned long TIMEOUT_MS = 500; // check that thi is not too long
+    const unsigned long TIMEOUT_MS = 500;
     unsigned long start = millis();
 
-    // Send EOT as init message
-    servoCom.write(EOT);
-    hostCom.print("Checking CIE connection");
+    // // 🔹 If data already flowing, send ESC to try to break out of it
+    // if (servoCom.available() > 0) {
+    //     hostCom.println("Data already in buffer, sending ESC...");
+    //     servoCom.write(ESC);
 
-     // Wait for 2 bytes
-    while (servoCom.available() < 2 && ((millis() - start) < TIMEOUT_MS)) {
+    //     unsigned long escStart = millis();
+    //     while (servoCom.available() == 0 && (millis() - escStart) < TIMEOUT_MS) {
+    //         delay(5);
+    //     }
+
+    //     if (servoCom.available() == 0) {
+    //         hostCom.println("No response after ESC");
+    //         return false; // no response to escape
+    //     }
+
+    //     // flush out whatever came back after ESC
+    //     while (servoCom.available() > 0) {
+    //         uint8_t b = servoCom.read();
+    //         hostCom.printf(" Flushed after ESC: 0x%02X\n", b);
+    //     }
+    // }
+
+
+    // 🔹 Clear any stale bytes in receive buffer
+    while (servoCom.available() > 0) {
+        servoCom.read();
+    }
+
+    servoCom.write(EOT);
+    hostCom.print("Checking CIE connection, ");
+
+    // Wait for 4 bytes (*, CHK, DATA, EOT)
+    while (servoCom.available() < 4 && (millis() - start) < TIMEOUT_MS) {
         delay(5);
     }
 
-    if (servoCom.available() < 2) {
+    if (servoCom.available() < 4) {
         return false; // Timeout or incomplete response
     }
 
-    uint8_t receivedCHK = servoCom.read();
-    uint8_t receivedEOT = servoCom.read();
+    uint8_t receivedStar = servoCom.read();   // should be '*'
+    uint8_t receivedCHK1 = servoCom.read();
+    uint8_t receivedCHK2 = servoCom.read();
+    uint8_t receivedEOT  = servoCom.read();   // <EOT>
+
+    hostCom.printf(" Received: STAR=0x%02X, CHK1=0x%02X, CHK2=0x%02X, EOT=0x%02X\n",
+                   receivedStar, receivedCHK1, receivedCHK2, receivedEOT);
+                       // CRC is calculated over the response start marker '*'
     
-    hostCom.printf(" Received CHK: 0x%02X, EOT: 0x%02X\n", receivedCHK, receivedEOT);
-    hostCom.print(" CRC calc for EOT: ");
-    hostCom.print(CRC_calc((const char[]){ EOT, '\0' }), HEX);
-    hostCom.println();
+    uint8_t crc = '*';  // XOR of single byte = itself
 
-    // char checksum = CRC_calc((const char[]){ EOT, '\0' });
+    // Convert CRC to ASCII hex
+    char crcStr[3];
+    snprintf(crcStr, sizeof(crcStr), "%02X", crc);
 
-     // check that this really was a valid response
-    return (receivedCHK == CRC_calc((const char[]){ EOT, '\0' })) && (receivedEOT == EOT);
+    // Validate reply
+    return (receivedStar == '*') &&
+           (receivedCHK1 == crcStr[0]) &&
+           (receivedCHK2 == crcStr[1]) &&
+           (receivedEOT == EOT);
 }
 
 void ServoCIEData::setComOpen(bool state) {
@@ -471,7 +581,7 @@ unsigned long ServoCIEData::getLastMessageTime() const {
 bool ServoCIEData::CIE_setup() {
     strcpy(CMD_RTIM, "RTIM");
     strcpy(CMD_RCTY, "RCTY");
-
+    strcpy(CMD_RSEN, "RSEN");
     strcpy(CMD_SDADB, "SDADB");
     // strcpy(PAYLOAD_SDADB, "113114117100102101103104109108107122105106128");
     strcat(CMD_SDADB, concatConfigChannels(metrics, metricCount).c_str());  // Append PAYLOAD_SDADB to CMD_SDADB
@@ -494,49 +604,54 @@ bool ServoCIEData::CIE_setup() {
     // getCIEResponse();
     
     if (CIE_comCheck()) {
-        hostCom.println(" CIE communication OK");
+        hostCom.println("CIE communication OK");
         setComOpen(true);
         setLastInitAttempt(millis());
         setLastMessageTime(millis());
     } else {
-        hostCom.println(" CIE communication FAILED");
+        hostCom.println("CIE communication FAILED");
         setComOpen(false);
         setLastInitAttempt(millis());
         return false; 
     }
     
     // get SERVO ventilator clock:
-    Send_SERVO_CMD(CMD_RTIM);
+    Send_SERVO_CMD_ASCII(CMD_RTIM);
     String rtimResponse = getCIEResponse();
     DateTime dt = parseRTIMResponse(rtimResponse.c_str(), rtimResponse.length());
     DateTime::setRTC(dt); // Static call, only sets if valid
     // if dt is invalid, RTC is not changed
 
-    Send_SERVO_CMD(CMD_RCTY);
+    Send_SERVO_CMD_ASCII(CMD_RCTY);
+    String rctyResponse = getCIEResponse();
+    parseRCTYResponse(rctyResponse.c_str(),rctyResponse.length() );
+
+    Send_SERVO_CMD_ASCII(CMD_RSEN);
+    String rsenResponse = getCIEResponse();
+    parseRSENResponse(rsenResponse.c_str(),rsenResponse.length() );
+
+    Send_SERVO_CMD_ASCII(CMD_SDADB);
     getCIEResponse();
 
-    Send_SERVO_CMD(CMD_SDADB);
+    Send_SERVO_CMD_ASCII(CMD_SDADS);
     getCIEResponse();
 
-    Send_SERVO_CMD(CMD_SDADS);
+    Send_SERVO_CMD_ASCII(CMD_SDADC);
     getCIEResponse();
 
-    Send_SERVO_CMD(CMD_SDADC);
+    Send_SERVO_CMD_ASCII(CMD_RCCO);
     getCIEResponse();
 
-    Send_SERVO_CMD(CMD_RCCO);
+    Send_SERVO_CMD_ASCII(CMD_RDAD);
     getCIEResponse();
 
-    Send_SERVO_CMD(CMD_RDAD);
-    getCIEResponse();
-
-    Send_SERVO_CMD(CMD_RADAB);
+    Send_SERVO_CMD_ASCII(CMD_RADAB);
     getCIEResponse();
     
-    Send_SERVO_CMD(CMD_RADAS);
+    Send_SERVO_CMD_ASCII(CMD_RADAS);
     getCIEResponse();
     
-    Send_SERVO_CMD(CMD_RADC);
+    Send_SERVO_CMD_ASCII(CMD_RADC);
     
     getCIEResponse();
     hostCom.print("\nCIE setup complete");
@@ -711,6 +826,7 @@ bool ServoCIEData::syncMetricSPIFFSToSD(const char* path) {
 }
 
 void ServoCIEData::printAllMetrics() {
+    hostCom.printf("\nMetrics configuration:\n");
     for (int i = 0; i < metricCount; i++) {
         hostCom.printf("%s:\t%s [%s]\tScale: %.4f\tOffset: %.2f\n",
                       metrics[i].channel.c_str(),
@@ -719,7 +835,7 @@ void ServoCIEData::printAllMetrics() {
                       metrics[i].scaleFactor,
                       metrics[i].offset);
     }
-    hostCom.printf("Total num metrics: %d\n", metricCount);
+    hostCom.printf("Total num metrics: %d\n\n", metricCount);
 }
 
 bool ServoCIEData::parseMetricLine(const String& line, Configs& m) {
@@ -842,15 +958,16 @@ bool ServoCIEData::syncSettingSPIFFSToSD(const char* path) {
 }
 
 void ServoCIEData::printAllSettings() {
+    hostCom.printf("\nSettings configuration:\n");
     for (int i = 0; i < settingCount; i++) {
-        hostCom.printf("%s:\t%s [%s]\tScale: %.4f\tOffset: %.2f\n",
+        hostCom.printf("%s:\t%s [%s]\tScale: %.3f\tOffset: %.2f\n",
                       settings[i].channel.c_str(),
                       settings[i].label.c_str(),
                       settings[i].unit.c_str(),
                       settings[i].scaleFactor,
                       settings[i].offset);
     }
-    hostCom.printf("Total num settings: %d\n", settingCount);
+    hostCom.printf("Total num settings: %d\n\n", settingCount);
 }
 
 bool ServoCIEData::parseSettingLine(const String& line, Configs& s) {
@@ -869,19 +986,6 @@ bool ServoCIEData::parseSettingLine(const String& line, Configs& s) {
 
     return true;
 }
-
-    // Method to scale both metrics and settings
-// void ServoCIEData::scaleAll(int metricSize, int settingSize) {
-//     // Scale metrics
-//     for (int i = 0; i < metricSize && i < metricCount; ++i) {
-//         MetricScaled[i] = MetricUnscaled[i] * metrics[i].scaleFactor + metrics[i].offset;
-//     }
-
-//     // Scale settings
-//     for (int i = 0; i < settingSize && i < settingCount; ++i) {
-//         settingsScaled[i] = settingsUnscaled[i] * settings[i].scaleFactor + settings[i].offset;
-//     }
-// }
 
 void ServoCIEData::scaleCIEData(const float* unscaledArray, float* scaledArray, int count, const Configs* configsArray) {
     for (int i = 0; i < count; ++i) {

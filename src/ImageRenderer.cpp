@@ -9,7 +9,8 @@ void ImageRenderer::begin() {
     
     tft.fillScreen(TFT_LOGOBACKGROUND); // Clear the display
     tft.setTextColor(TFT_WHITE, TFT_LOGOBACKGROUND  ); // Set text color and background
-    tft.setTextSize(2); // Set text size
+    currentTextSize = smallTextSize;
+    tft.setTextSize(currentTextSize); // Set text size
     tft.setCursor(10, 10); // Set cursor position
     tft.println("LundaLogger Ready"); // Print a message on the display
     delay(1000); // Delay to allow the display to show the message
@@ -23,13 +24,13 @@ void ImageRenderer::clear() {
 
 void ImageRenderer::drawMainScreen() {
   /// screen gfx stuff
-    tft.setFreeFont(FSSB24);    
+    tft.setFreeFont(FSSB18);    
     tft.setTextColor(TFT_DEEPBLUE, TFT_LOGOBACKGROUND); // Set text color and background
-    // tft.setTextSize(2); // Set text size
+    tft.setTextSize(smallTextSize); // Set text size
     tft.setCursor(10, 10); // Set cursor position
     tft.drawString("LundaLogger", 10, 10); // Print a message on the display
     tft.setCursor(10, 50); // Set cursor position for next line
-    tft.setTextSize(1); // Set text size for the next line
+    tft.setTextSize(smallTextSize); // Set text size for the next line
 };
 
 void ImageRenderer::drawString(const String& text, int x, int y, int font) {
@@ -45,26 +46,61 @@ void ImageRenderer::drawCenteredText(const String& text, int y) {
     tft.drawString(text, x, y);
 }
 
+void ImageRenderer::drawServoID(const String& servoID, int x, int y) {
+    tft.setFreeFont(FSS9);  
+    
+    tft.setTextColor(TFT_DEEPBLUE, TFT_LOGOBACKGROUND);
+    tft.setTextSize(smallTextSize);
+
+    // Draw new date/time in small font
+    tft.setCursor(x, y);
+    tft.print(servoID);
+}
+
 void ImageRenderer::drawDateTimeAt(const DateTime& dt, int x, int y, int spacing) {
+    static String prevDateTimeStr = "";
+    
+    uint16_t textColor = TFT_DEEPBLUE;
+    uint16_t bgColor   = TFT_LOGOBACKGROUND;
+    tft.setFreeFont(FSS9);  
+
+    int prevFontSize = smallTextSize; // save current font size
+    int smallFont = 1;                  // smaller font for date/time
+    
+    tft.setTextColor(textColor, bgColor);
+    tft.setTextSize(smallFont);
+
     if (!dt.isValid()) {
-        tft.setCursor(x, y);
-        tft.print("Invalid Time");
-        return;
+      tft.setCursor(x, y);
+      tft.print("Invalid Time");
+ 
+      prevDateTimeStr = "Invalid Time";
+      return;
     }
 
     String dateStr = String(dt.year()) + "-" +
                      String(dt.month()) + "-" +
-                     String(dt.day());
+                     String(dt.day()) + " ";
 
     String timeStr = String(dt.hour()) + ":" +
                      (dt.minute() < 10 ? "0" : "") + String(dt.minute()) + ":" +
                      (dt.second() < 10 ? "0" : "") + String(dt.second());
 
+    // Erase previous date/time
+    tft.setTextColor(bgColor, bgColor);
     tft.setCursor(x, y);
-    tft.print(dateStr);
+    tft.print(prevDateTimeStr);
 
-    tft.setCursor(x, y + spacing);
-    tft.print(timeStr);
+    // Draw new date/time in small font
+    tft.setTextColor(textColor, bgColor);
+    tft.setCursor(x, y);
+    tft.print(dateStr + timeStr);
+
+    // Save for next update
+    prevDateTimeStr = dateStr + timeStr;
+    
+    // Restore previous font size
+    tft.setTextSize(prevFontSize);
 }
 
 void ImageRenderer::drawImage(int x, int y, int w, int h, const uint16_t *img) {

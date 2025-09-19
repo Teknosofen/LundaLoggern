@@ -71,9 +71,61 @@ void WifiApServer::handleRoot() {
     server.send(200, "text/html", generateHtmlPage());
 }
 
-// Note: The file manager handles both download and delete actions.
-void WifiApServer::handleFileManager() {
+// // Note: The file manager handles both download and delete actions.
+// void WifiApServer::handleFileManager() {
     
+//     File root = SD.open("/");
+//     File file = root.openNextFile();
+
+//     String html = "<!DOCTYPE html><html><head><title>File Manager</title>";
+//     html += "<style>";
+//     html += "table { border-collapse: collapse; width: 100%; max-width: 600px; }";
+//     html += "th, td { padding: 8px; border: 1px solid #ccc; text-align: left; }";
+//     html += "th { background-color: #f0f0f0; }";
+//     html += "</style>";
+//     html += "<script>";
+//     html += "function confirmDelete(event) {";
+//     html += "  if (!confirm('Are you sure you want to delete the selected files?')) {";
+//     html += "    event.preventDefault();";
+//     html += "  }";
+//     html += "}";
+//     html += "function toggleAll(source) {";
+//     html += "  let checkboxes = document.querySelectorAll('input[name=\"file\"]');";
+//     html += "  for (let cb of checkboxes) { cb.checked = source.checked; }";
+//     html += "}";
+//     html += "</script></head><body>";
+
+//     html += "<h2>File Manager</h2>";
+//     html += "<form method='POST' action='/delete' onsubmit='confirmDelete(event)'>";
+//     html += "<table><tr>";
+//     html += "<th><input type='checkbox' onclick='toggleAll(this)'></th>";
+//     html += "<th>File</th><th>Size (KB)</th></tr>";
+
+//     while (file) {
+//         if (!file.isDirectory()) {
+//             String name = String(file.name());
+//             size_t sizeKB = file.size() / 1024;
+//             html += "<tr>";
+//             html += "<td><input type='checkbox' name='file' value='" + name + "'></td>";
+//             html += "<td>" + name + "</td>";
+//             html += "<td>" + String(sizeKB) + "</td>";
+//             html += "</tr>";
+//         }
+//         file = root.openNextFile();
+//     }
+
+//     html += "</table><br>";
+//     html += "<button type='submit' formaction='/download' formmethod='GET'>Download Selected</button> ";
+//     html += "<button type='submit'>Delete Selected</button>";
+//     html += "</form>";
+
+//     html += "<br><br><a href='/'>Back to Main Page</a>";
+//     html += "</body></html>";
+
+//     server.send(200, "text/html", html);
+// }
+
+void WifiApServer::handleFileManager() {
     File root = SD.open("/");
     File file = root.openNextFile();
 
@@ -83,6 +135,8 @@ void WifiApServer::handleFileManager() {
     html += "th, td { padding: 8px; border: 1px solid #ccc; text-align: left; }";
     html += "th { background-color: #f0f0f0; }";
     html += "</style>";
+
+    // --- JavaScript ---
     html += "<script>";
     html += "function confirmDelete(event) {";
     html += "  if (!confirm('Are you sure you want to delete the selected files?')) {";
@@ -90,14 +144,27 @@ void WifiApServer::handleFileManager() {
     html += "  }";
     html += "}";
     html += "function toggleAll(source) {";
-    html += "  let checkboxes = document.querySelectorAll('input[name=\"file\"]');";
+    html += "  let checkboxes = document.querySelectorAll('#fileTable input[type=checkbox]');";
     html += "  for (let cb of checkboxes) { cb.checked = source.checked; }";
+    html += "}";
+    html += "function copySelection(formId) {";  // copy selected checkboxes to hidden inputs
+    html += "  let form = document.getElementById(formId);";
+    html += "  form.querySelectorAll('input[name=file]').forEach(e => e.remove());";  // clear old
+    html += "  document.querySelectorAll('#fileTable input[name=file]:checked').forEach(cb => {";
+    html += "    let hidden = document.createElement('input');";
+    html += "    hidden.type = 'hidden';";
+    html += "    hidden.name = 'file';";
+    html += "    hidden.value = cb.value;";
+    html += "    form.appendChild(hidden);";
+    html += "  });";
     html += "}";
     html += "</script></head><body>";
 
+    // --- Page content ---
     html += "<h2>File Manager</h2>";
-    html += "<form method='POST' action='/delete' onsubmit='confirmDelete(event)'>";
-    html += "<table><tr>";
+
+    // Table (not inside any form)
+    html += "<table id='fileTable'><tr>";
     html += "<th><input type='checkbox' onclick='toggleAll(this)'></th>";
     html += "<th>File</th><th>Size (KB)</th></tr>";
 
@@ -115,7 +182,15 @@ void WifiApServer::handleFileManager() {
     }
 
     html += "</table><br>";
-    html += "<button type='submit' formaction='/download' formmethod='GET'>Download Selected</button> ";
+
+    // Download form (GET)
+    html += "<form id='downloadForm' method='GET' action='/download' onsubmit='copySelection(\"downloadForm\")'>";
+    html += "<button type='submit'>Download Selected</button>";
+    html += "</form> ";
+
+    // Delete form (POST, with confirmation)
+    html += "<form id='deleteForm' method='POST' action='/delete' ";
+    html += "onsubmit='copySelection(\"deleteForm\"); confirmDelete(event)'>";
     html += "<button type='submit'>Delete Selected</button>";
     html += "</form>";
 
@@ -124,6 +199,9 @@ void WifiApServer::handleFileManager() {
 
     server.send(200, "text/html", html);
 }
+
+
+
 
 
 void WifiApServer::handleFileDownload() {
@@ -145,6 +223,7 @@ void WifiApServer::handleFileDownload() {
     }
     server.send(404, "text/plain", "No file found");
 }
+
 void WifiApServer::handleFileDelete() {
     for (int i = 0; i < server.args(); ++i) {
         String f = "/" + server.arg(i);

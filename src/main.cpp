@@ -11,6 +11,15 @@
 // ---------------------------------
 
 
+// in the TFT_eSPI TFT_eSPI_User_setup_Select.H ensure that the 
+// line 133 #include <User_Setups/Setup206_LilyGo_T_Display_S3.h>     // For the LilyGo T-Display S3 based ESP32S3 with ST7789 170 x 320 TFT
+
+// In the TFT_eSPI_User_setup.H 
+// line 55 #define ST7789_DRIVER      // Full configuration option, define additional parameters below for this display
+// line 87 #define TFT_WIDTH  170 // ST7789 170 x 320
+// line 92 #define TFT_HEIGHT 320 // ST7789 240 x 320
+
+
 TFT_eSPI tft = TFT_eSPI(); // Initialize the display
 TFT_eSprite spriteLeft = TFT_eSprite(&tft); // Create sprite object left
 ImageRenderer renderer(tft);
@@ -24,24 +33,29 @@ const SPISettings SENSOR_SPI_SETTINGS = SPISettings(25000000, MSBFIRST, SPI_MODE
 
 SDManager sd(hspi, HSPI_CS); // Pass your CS pin here
 
-WifiApServer WiFiserver("LundaLoggern", "neonatal");
+WifiApServer WiFiserver("LundaLoggern", ""); //"neonatal");
 
 DateTime dateTime; // Global DateTime object
 
+
 void setup() {
   hostCom.begin(115200); // Initialize hostCom for debugging
-  delay(2000); // Wait for Serial to initialize
+  delay(5000); // Wait for Serial to initialize
  
   // ensure that the servoCOM used the appripriate parity!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   hostCom.println("LundaLogger setup started");
 
+  renderer.begin(); //initialize display
+
+  // pinMode(RXD2, INPUT);
+  // pinMode(TXD2, OUTPUT);
   servoCom.begin(SERVO_BAUD, SERIAL_8E1, RXD2, TXD2); // RX = GPIO16, TX = GPIO17
 
-  delay(2000); // Wait for Serial to initialize
+  delay(100); // Wait for Serial to initialize
 
   hspi.begin(HSPI_SCLK, HSPI_MISO, HSPI_MOSI, HSPI_CS); // SCK, MISO, MOSI, CS
   bool initSuccess = sd.begin(); // Attempt to initialize SD card and update internal status
-  sd.setCardPresent(initSuccess); // Explicit status tracking
+  sd.setCardPresent(initSuccess); // Explicit status tracking, done in method already
 
   if (sd.isCardPresent()) {
     hostCom.println("✅ SD card is present and mounted.");
@@ -64,24 +78,10 @@ void setup() {
    } else {
       hostCom.println("✅ SPIFFS mounted successfully");
   }
-  
+ 
   servoCIEData.initializeConfigs(MetricConfigPath, SettingConfigPath);
   servoCIEData.begin();
- 
-  renderer.begin(); //initialize display
 
-  // Display setup
-  // tft.init();
-  // tft.setRotation(1); // Set display orientation
-  
-  // tft.fillScreen(TFT_LOGOBACKGROUND); // Clear the display
-  // tft.setTextColor(TFT_WHITE, TFT_LOGOBACKGROUND  ); // Set text color and background
-  // tft.setTextSize(2); // Set text size
-  // tft.setCursor(10, 10); // Set cursor position
-  // tft.println("LundaLogger Ready"); // Print a message on the display
-  // delay(1000); // Delay to allow the display to show the message
-  // renderer.pushFullImage(220, 40, 100, 100, lundaLogo);
- 
   // WiFiserver.setLogoData(lundaLogo, 100, 100);
   WiFiserver.setTextAndValues("LundaLogger", 23.5, 67.8, 1013.2, 3.7);
   WiFiserver.setLabel(0, "Temp");
@@ -93,19 +93,10 @@ void setup() {
   WiFiserver.enableSdFileDelete(true);
 
   WiFiserver.begin();
-  hostCom.print("Access Point IP: ");
-  hostCom.println(WiFiserver.getApIpAddress());
-
-  // List files in SPIFFS for debugging
-  hostCom.println("Listing files in SPIFFS:");
-  File root = SPIFFS.open("/");
-  File file = root.openNextFile();
-
-  while (file) {
-      hostCom.println(file.name());
-      file = root.openNextFile();
-  }
-
+  hostCom.printf("Access Point IP: %s\n", WiFiserver.getApIpAddress());
+  // hostCom.println(WiFiserver.getApIpAddress());
+  
+  sd.listRoot();  // List all files in root
 }
 
 void loop() {
@@ -115,11 +106,12 @@ void loop() {
   static bool initLoop = false; // Flag to check if loop has been initialized
   if (!initLoop) {
     initLoop = true; // Set the flag to true to indicate loop has been initialized
-    hostCom.println("LundaLogger loop initialized");
+    hostCom.println("LundaLogger loop start init");
     renderer.clear(); // Clear the display with blue color
     renderer.setTextSize(1); // Set text size for the next line
     renderer.pushFullImage(220, 40, 100, 100, lundaLogo);
     renderer.drawSDStatusIndicator(sd.isCardPresent());
+    hostCom.println("LundaLogger loop now initialized");
   } // init loop
 
   static uint32_t loopStartTime = millis(); // Record the start time of the loop
@@ -129,7 +121,8 @@ void loop() {
 
     renderer.drawMainScreen();
     renderer.drawString(WiFiserver.getApIpAddress(), 10, 50, 2); // Print another message on the display
-    renderer.drawDateTimeAt(dateTime.getRTC(), 10, 150); // Draw current RTC time
+    renderer.drawDateTimeAt(dateTime.getRTC(), 10, 160); // Draw current RTC time
+    renderer.drawServoID(servoCIEData.getServoID(), 10, 140);
 
     if (sd.updateCardStatus()) {
       hostCom.println("🔄 SD status changed!");
@@ -138,13 +131,11 @@ void loop() {
       hostCom.print("SD status updated: ");
       hostCom.println(sd.isCardPresent() ? "true" : "false");
     }
-  
+
     // renderer.pushFullImage(220, 40, 100, 100, lundaLogo);
     hostCom.println("looping..."); // Print a message to the host serial port
 
-
-  } else {
-  } // timed loop
+  }
 
   // check for serial data from CIE and ventilator
 
@@ -157,11 +148,12 @@ void loop() {
 
   // Retry INIT if communication is lost
   if (!servoCIEData.isComOpen() && (now - servoCIEData.getLastInitAttempt() > INIT_INTERVAL_MS)) {
-    hostCom.println("🔄 Sending INIT...");
+    hostCom.println("🔄 (Re)Sending INIT...");
       if (servoCIEData.CIE_comCheck()) {
           hostCom.println("✅ CIE communication re-established.");
           servoCIEData.setComOpen(true);
           servoCIEData.setLastMessageTime(now); // Reset message timer
+          servoCIEData.CIE_setup();
       } else {
           hostCom.println("❌ CIE communication re-check failed.");
       }
@@ -173,7 +165,5 @@ void loop() {
     servoCIEData.parseCIEData(inByte);
   }
 
-
   WiFiserver.handleClient();  // This keeps the web server alive
-
-  }
+}

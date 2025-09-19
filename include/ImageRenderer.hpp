@@ -17,6 +17,7 @@ public:
   void begin();                     // Initialize display
   void clear();                     // Clear screen
   void drawDateTimeAt(const DateTime& dt, int x, int y, int spacing = 20); // Draw date/time at position
+  void drawServoID(const String& servoID, int x, int y);
   void drawMainScreen();        // Draw main screen layout
   void setTextSize(int size) { tft.setTextSize(size); } // Set text size
   void drawString(const String& text, int x, int y, int font = 2);
@@ -25,5 +26,7 @@ public:
 private:
   TFT_eSPI &tft;
   void drawCenteredText(const String& text, int y); // Optional helper
-
+  int currentTextSize = 2;
+  const int smallTextSize = 1;
+  const int largeTextSize = 2;
 };
