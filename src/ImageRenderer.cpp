@@ -221,28 +221,49 @@ void ImageRenderer::drawCOMStatusIndicator(bool isPresent) {
   // tft.setFreeFont(prevFont);
   tft.setTextDatum(prevDatum);
   tft.setTextColor(prevFGColor, prevBGColor);
-
 }
-// void ImageRenderer::drawSDStatusIndicator(bool isPresent) {  
-//     const uint16_t color     = isPresent ? 0x07E0 : 0xF800; // Green or Red
-//     const uint16_t BackColor = isPresent ? 0x0330 : 0x4000; // contrasting Green or Red
-//     const char* label = isPresent ? "SD OK" : "SD FAIL";
-//     tft.setFreeFont(FSSB12); // Set a larger font for better visibility
-    
-//     int textWidth  = tft.textWidth("SD FAIL"); // adopt to the longest message
-//     int textHeight = tft.fontHeight();
-//     const int padding = 6;
-//     int boxWidth  = textWidth + padding * 2;
-//     int boxHeight = textHeight + padding;
 
-//     int x = TFT_HEIGHT - textWidth - 15; // Right-aligned with margin
-//     int y = 140; // Vertical position under logo; tweak if needed
+void ImageRenderer:: drawBreathPhase(uint8_t phase, int x, int y) {
+  static String prevPhase = "";
+  String phaseString = "";
+  uint16_t textColor = TFT_DEEPBLUE;
+  uint16_t bgColor   = TFT_LOGOBACKGROUND;
+  tft.setFreeFont(FSS9);  
 
-//     tft.setTextColor(color, BackColor); // Set text color and background
-//     // tft.fillRect(x, y, boxWidth, boxHeight, BackColor); // Clear area for text
-//     int radius = 5;
-//     tft.fillRoundRect(x, y, boxWidth, boxHeight, radius, BackColor);
-//     tft.setCursor(x + padding, y + (boxHeight - textHeight) / 2);
-//     tft.print(label);
+  int prevFontSize = smallTextSize; // save current font size
+  int smallFont = 1;                  // smaller font for date/time
     
-// }
+  #define inspPhase 0x10
+  #define pausePhase 0x20
+  #define expPhase 0x30
+
+  tft.setTextColor(textColor, bgColor);
+  tft.setTextSize(smallFont);
+
+  switch (phase) {
+    case inspPhase:
+      phaseString = "IN ";
+    break;  
+    case pausePhase:
+      phaseString = " - ";
+    break;  
+    case expPhase:
+      phaseString = "OUT";
+    break;  
+    default:
+      phaseString = "---";
+    break;
+  }
+    // hostCom.println(phaseString);
+
+    // Erase previous date/time
+    tft.setTextColor(bgColor, bgColor);
+    tft.setCursor(x, y);
+    tft.print(prevPhase);
+
+    // Draw new phase
+    tft.setTextColor(textColor, bgColor);
+    tft.setCursor(x, y);
+    tft.print(phaseString);
+    prevPhase = phaseString;
+  }

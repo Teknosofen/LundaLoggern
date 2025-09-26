@@ -24,14 +24,17 @@ TFT_eSPI tft = TFT_eSPI(); // Initialize the display
 TFT_eSprite spriteLeft = TFT_eSprite(&tft); // Create sprite object left
 ImageRenderer renderer(tft);
 
-ServoCIEData servoCIEData;
+// SDManager sd(hspi, HSPI_CS, &dateTime); // Pass your CS pin here
+
 const char* MetricConfigPath = "/MetricConfig.txt";
 const char* SettingConfigPath = "/SettingConfig.txt";
 
 SPIClass hspi(HSPI);
 const SPISettings SENSOR_SPI_SETTINGS = SPISettings(25000000, MSBFIRST, SPI_MODE0); // 25 MHz
 
-SDManager sd(hspi, HSPI_CS); // Pass your CS pin here
+SDManager sd(hspi, HSPI_CS, &dateTime); // Pass your CS pin here
+
+ServoCIEData servoCIEData(&sd);
 
 WifiApServer WiFiserver("LundaLoggern", ""); //"neonatal");
 
@@ -56,6 +59,9 @@ void setup() {
   hspi.begin(HSPI_SCLK, HSPI_MISO, HSPI_MOSI, HSPI_CS); // SCK, MISO, MOSI, CS
   bool initSuccess = sd.begin(); // Attempt to initialize SD card and update internal status
   sd.setCardPresent(initSuccess); // Explicit status tracking, done in method already
+
+  // Debug 
+  // sd.deleteAllFiles();  // Delete everything on the SD card
 
   if (sd.isCardPresent()) {
     hostCom.println("✅ SD card is present and mounted.");
@@ -113,19 +119,30 @@ void loop() {
     renderer.setTextSize(1); // Set text size for the next line
     renderer.pushFullImage(220, 40, 100, 100, lundaLogo);
     renderer.drawSDStatusIndicator(sd.isCardPresent());
+    renderer.drawMainScreen();
+    renderer.drawString(WiFiserver.getApIpAddress(), 10, 50, 2); // Print another message on the display
     hostCom.println("LundaLogger loop now initialized");
   } // init loop
 
-  static uint32_t loopStartTime = millis(); // Record the start time of the loop
+  static uint32_t loopStartTime = micros(); // Record the start time of the loop
   if (micros() - loopStartTime > SET_LOOP_TIME) { // time loop
     // Check if enough time has passed since the last loop iteration
     loopStartTime = micros(); // Reset the start time for the next loop
 
-    renderer.drawMainScreen();
-    renderer.drawString(WiFiserver.getApIpAddress(), 10, 50, 2); // Print another message on the display
+    // renderer.drawMainScreen();
+    // renderer.drawString(WiFiserver.getApIpAddress(), 10, 50, 2); // Print another message on the display
     renderer.drawDateTimeAt(dateTime.getRTC(), 10, 160); // Draw current RTC time
     renderer.drawServoID(servoCIEData.getServoID(), 10, 140);
     renderer.drawCOMStatusIndicator(servoCIEData.isComOpen());
+    
+    // Update breath phase of display
+    static uint8_t lastBreathPhase = 0;
+    uint8_t currentBreathPhase = servoCIEData.getBreathPhase();
+    if (lastBreathPhase != currentBreathPhase) {
+      lastBreathPhase = currentBreathPhase;
+    renderer.drawBreathPhase(currentBreathPhase, 180, 140);
+    };
+
 
     if (sd.updateCardStatus()) {
       hostCom.println("🔄 SD status changed!");
@@ -135,36 +152,31 @@ void loop() {
       hostCom.println(sd.isCardPresent() ? "true" : "false");
     }
 
-    // renderer.pushFullImage(220, 40, 100, 100, lundaLogo);
-    hostCom.print("."); // Print a message to the host serial port
-  }
+    // Supervise communication timeout
+    if (servoCIEData.isComOpen() && (now - servoCIEData.getLastMessageTime() > TIMEOUT_MS)) {
+        hostCom.println("⚠️ Connection lost due to timeout.");
+        servoCIEData.setComOpen(false);
+        servoCIEData.setLastInitAttempt(now); // Reset init timer
+    }
 
+    // Retry INIT if communication is lost
+    if (!servoCIEData.isComOpen() && (now - servoCIEData.getLastInitAttempt() > INIT_INTERVAL_MS)) {
+      hostCom.println("🔄 (Re)Sending INIT...");
+        if (servoCIEData.CIE_comCheck()) {
+            hostCom.println("✅ CIE communication re-established.");
+            servoCIEData.setComOpen(true);
+            servoCIEData.setLastMessageTime(now); // Reset message timer
+            servoCIEData.CIE_setup();
+        } else {
+            hostCom.println("❌ CIE communication re-check failed.");
+        }
+        servoCIEData.setLastInitAttempt(now);
+    }
+  }
   // check for serial data from CIE and ventilator
-
-  // Supervise timeout
-  if (servoCIEData.isComOpen() && (now - servoCIEData.getLastMessageTime() > TIMEOUT_MS)) {
-      hostCom.println("⚠️ Connection lost due to timeout.");
-      servoCIEData.setComOpen(false);
-      servoCIEData.setLastInitAttempt(now); // Reset init timer
-  }
-
-  // Retry INIT if communication is lost
-  if (!servoCIEData.isComOpen() && (now - servoCIEData.getLastInitAttempt() > INIT_INTERVAL_MS)) {
-    hostCom.println("🔄 (Re)Sending INIT...");
-      if (servoCIEData.CIE_comCheck()) {
-          hostCom.println("✅ CIE communication re-established.");
-          servoCIEData.setComOpen(true);
-          servoCIEData.setLastMessageTime(now); // Reset message timer
-          servoCIEData.CIE_setup();
-      } else {
-          hostCom.println("❌ CIE communication re-check failed.");
-      }
-      servoCIEData.setLastInitAttempt(now);
-  }
-
   if (servoCom.available()) {
     char inByte = servoCom.read();                               // get the byte from the ventilator 
-    hostCom.print(inByte);
+    // hostCom.print(inByte, HEX);
     servoCIEData.parseCIEData(inByte);
   }
 

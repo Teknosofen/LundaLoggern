@@ -4,9 +4,11 @@
 #include <SPI.h>
 #include <SD.h>
 
+extern DateTime dateTime;
+
 class SDManager {
 public:
-  SDManager(SPIClass &spiBus, uint8_t csPin);
+  SDManager(SPIClass &spiBus, uint8_t csPin, DateTime* dateTime);
 
   bool begin();
   void setCardPresent(bool status);
@@ -16,6 +18,10 @@ public:
   bool writeTextFile(const char* path, const String& content);
   bool appendTextFile(const char* path, const String& content);
   void listRoot();
+  void deleteAllFiles(const char* path  = "/");
+
+  String getCurrentFileName(char dataType);
+  void appendData(String data, char dataType);
 
   enum SDState {
     SD_IDLE,
@@ -36,4 +42,8 @@ private:
   SPIClass &spi;
   uint8_t cs;
   bool cardPresent;
+
+  DateTime* dateTime;
+
+  String currentFileName = "";
 };

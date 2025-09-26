@@ -1,8 +1,9 @@
 #include "ServoCIEData.hpp"
 #include "DateTime.hpp"
+#include "SDManager.hpp"
 
-ServoCIEData::ServoCIEData() 
-    : RunMode(Awaiting_Info), ByteCount(0), MetricNo(0), settingsNo(0) {
+ServoCIEData::ServoCIEData(SDManager* manager) 
+    : RunMode(Awaiting_Info), ByteCount(0), MetricNo(0), settingsNo(0), sdManager(manager) {
 // ServoCIEData::ServoCIEData() : RunMode(Awaiting_Info), ByteCount(0), MetricNo(0), settingsNo(0) {
     // Initialize other members if needed
 }
@@ -22,7 +23,8 @@ bool ServoCIEData::begin() {
 }
 
 void ServoCIEData::parseCIEData(char NextSCI_chr) {
-    hostCom.print(NextSCI_chr, HEX);
+    // hostCom.print(NextSCI_chr, HEX);
+    // hostCom.printf(" %2.X",NextSCI_chr);
     switch (RunMode) {
         case Awaiting_Info:
             switch (NextSCI_chr) {
@@ -76,34 +78,16 @@ void ServoCIEData::parseCIEData(char NextSCI_chr) {
                 --ByteCount;
                 metrics[MetricNo].scaled = metrics[MetricNo].unscaled * metrics[MetricNo].scaleFactor - metrics[MetricNo].offset;
             } else if (ByteCount == 0 && NextSCI_chr == EndFlag) {
-                // instead of copying into ventO2BreathData,
-                // you directly use metrics[k].scaled everywhere in your code
-                // Example:
-                // float rr = metrics[3].scaled;   // cieRR
-                // float ie = metrics[11].scaled;  // cieIE
+              
+                String tempStr = dateTime.getRTC().toString() + "\t" + getScaledValuesAsString(metrics, MetricNo);
+                String labelStr = "\t";
 
-
-                // Special cases no longer needed I assume
+                String tempFileName = sdManager->getCurrentFileName('M');
+                sdManager->appendData(tempStr, 'M');
                 
-                // float cieRR = metrics[3].scaled;
-                // float cieIE = metrics[11].scaled;
-                // float cieTi2Ttot = metrics[14].scaled;
-
-                // if (cieIE < (cieDataInvalid - 1) * 0.01) {
-                //     metrics[metricCount].scaled = 60.0 / (cieRR * (1.0 + cieIE)); // calcExpTime
-                //     metrics[metricCount+1].scaled = cieIE * 60.0 / (cieRR * (1.0 + cieIE)); // calcInspTime
-                // } else {
-                //     metrics[metricCount].scaled = (1 - cieTi2Ttot) * 60 / cieRR; // calcExpTime
-                //     metrics[metricCount+1].scaled = cieTi2Ttot * 60 / cieRR;     // calcInspTime
-                // }
-
-                String tempStr = dateTime.getRTC().toString() + " ";
-                for (int i = 0; i < MetricNo; i++) {
-                    tempStr += String(metrics[i].scaled, 2) + "\t";
-                }
-                tempStr += "\n";
-                hostCom.println(tempStr);
-
+                // We have a valid com, reset the timer:
+                setLastMessageTime(millis());
+                
                 RunMode = End_Flag_Found;
             } else {
                 MetricNo++;
@@ -121,11 +105,16 @@ void ServoCIEData::parseCIEData(char NextSCI_chr) {
                 --ByteCount;
                 settings[settingsNo].scaled = settings[settingsNo].unscaled * settings[settingsNo].scaleFactor - settings[settingsNo].offset;
             } else if (ByteCount == 0 && NextSCI_chr == EndFlag) {
-                // no more servoSettings struct — use settings[k].scaled directly
-                // Example:
-                // float setRespRate = settings[0].scaled;
-                // float setFiO2     = settings[3].scaled;
+ 
+                String tempStr = dateTime.getRTC().toString() + "\t" +getScaledValuesAsString(settings, settingsNo, true);
 
+                String tempFileName = sdManager->getCurrentFileName('S');
+                sdManager->appendData(tempStr, 'S');
+                // hostCom.print(tempStr);
+                
+                // We have a valid com, reset the timer:
+                setLastMessageTime(millis());
+                
                 RunMode = End_Flag_Found;
             } else {
                 settingsNo++;
@@ -134,76 +123,6 @@ void ServoCIEData::parseCIEData(char NextSCI_chr) {
             }
             break;
 
-
-        // case Breath_Data:
-        //     if (ByteCount == 2) {
-        //         MetricUnscaled[MetricNo] = 256 * NextSCI_chr;
-        //         --ByteCount;
-        //     } else if (ByteCount == 1) {
-        //         MetricUnscaled[MetricNo] += NextSCI_chr;
-        //         --ByteCount;
-        //         MetricScaled[MetricNo] = MetricUnscaled[MetricNo] * MetricScaleFactors[MetricNo] - MetricOffset[MetricNo];
-        //     } else if (ByteCount == 0 && NextSCI_chr == EndFlag) {
-        //         int k = 0;
-        //         ventO2BreathData.cieVtCO2   = MetricScaled[k++];
-        //         ventO2BreathData.cieFetCO2  = MetricScaled[k++];
-        //         ventO2BreathData.cieMVCO2   = MetricScaled[k++];
-        //         ventO2BreathData.cieRR      = MetricScaled[k++];
-        //         ventO2BreathData.cieVtInsp  = MetricScaled[k++];
-        //         ventO2BreathData.cieVtExp   = MetricScaled[k++];
-        //         ventO2BreathData.cieMVinsp  = MetricScaled[k++];
-        //         ventO2BreathData.cieMVExp   = MetricScaled[k++];
-        //         ventO2BreathData.cieFiO2    = MetricScaled[k++];
-        //         ventO2BreathData.ciePEEP    = MetricScaled[k++];
-        //         ventO2BreathData.ciePplat   = MetricScaled[k++];
-        //         ventO2BreathData.cieIE      = MetricScaled[k++];
-        //         ventO2BreathData.ciePpeak   = MetricScaled[k++];
-        //         ventO2BreathData.Pmean      = MetricScaled[k++];
-        //         ventO2BreathData.cieTi2Ttot = MetricScaled[k];
-
-        //         if (ventO2BreathData.cieIE < (cieDataInvalid - 1) * 0.01) {
-        //             ventO2BreathData.calcExpTime = 60.0 / (ventO2BreathData.cieRR * (1.0 + ventO2BreathData.cieIE));
-        //             ventO2BreathData.calcInspTime = ventO2BreathData.cieIE * 60.0 / (ventO2BreathData.cieRR * (1.0 + ventO2BreathData.cieIE));
-        //         } else {
-        //             ventO2BreathData.calcExpTime = (1 - ventO2BreathData.cieTi2Ttot) * 60 / ventO2BreathData.cieRR;
-        //             ventO2BreathData.calcInspTime = ventO2BreathData.cieTi2Ttot * 60 / ventO2BreathData.cieRR;
-        //         }
-        //         RunMode = End_Flag_Found;
-        //     } else { // check when this is appliccable
-        //         MetricNo++;
-        //         MetricUnscaled[MetricNo] = 256 * NextSCI_chr;
-        //         ByteCount = 1;
-        //     }
-
-        //     break;
-
-        //     case Settings_Data:
-        //     if (ByteCount == 2) {
-        //         settingsUnscaled[settingsNo] = 256 * NextSCI_chr;
-        //         --ByteCount;
-        //     } else if (ByteCount == 1) {
-        //         settingsUnscaled[settingsNo] += NextSCI_chr;
-        //         --ByteCount;
-        //         settingsScaled[settingsNo] = settingsUnscaled[settingsNo] * settingsScaleFactors[settingsNo] - settingsOffset[settingsNo];
-        //     } else if (ByteCount == 0 && NextSCI_chr == EndFlag) {
-        //         int k = 0;
-        //         servoSettings.setRespRate   = settingsScaled[k++];
-        //         servoSettings.setMinuteVol  = settingsScaled[k++];
-        //         servoSettings.setPeep       = settingsScaled[k++];
-        //         servoSettings.setFiO2       = settingsScaled[k++];
-        //         servoSettings.setInspPress  = settingsScaled[k++];
-        //         servoSettings.setVt         = settingsScaled[k++];
-        //         servoSettings.setVentMode   = settingsScaled[k++];
-        //         servoSettings.setPatRange   = settingsScaled[k++];
-        //         servoSettings.setComplianceCompensationOn = settingsScaled[k++];
-        //         servoSettings.setIERatio    = settingsScaled[k];
-        //         RunMode = End_Flag_Found;
-        //     } else {
-        //         settingsNo++;
-        //         settingsUnscaled[settingsNo] = 256 * NextSCI_chr;
-        //         ByteCount = 1;
-        //     }
-        //     break;
         case Value_Data:
             switch (CurveCounter) {
                 case 0:
@@ -212,11 +131,12 @@ void ServoCIEData::parseCIEData(char NextSCI_chr) {
                         --ByteCount;
                     } else if (ByteCount == 1) {
                         cieFlow += NextSCI_chr;
-                        ventO2CurveData.cieFlow = cieFlow * 0.25 - 4000.0;
+                        cieFlow = cieFlow * 0.25 - 4000.0;
                         RunMode = Run_Mode;
                         --ByteCount;
                         if (NumberOfCurves > 1) CurveCounter = 1;
                         else CurveCounter = 0;
+                        // hostCom.printf("cieFlow: %.2f\t", ventO2CurveData.cieFlow);
                     }
                     break;
                 case 1:
@@ -225,34 +145,40 @@ void ServoCIEData::parseCIEData(char NextSCI_chr) {
                         --ByteCount;
                     } else if (ByteCount == 1) {
                         cieFCO2 += NextSCI_chr;
-                        ventO2CurveData.cieCO2 = (cieFCO2 * 0.1);
+                        cieFCO2 = (cieFCO2 * 0.1);
                         RunMode = Run_Mode;
                         --ByteCount;
                         if (NumberOfCurves > 2) CurveCounter = 2;
                         else CurveCounter = 0;
+                        // hostCom.printf("cieCO2: %.2f\t", ventO2CurveData.cieCO2);
                     }
                     break;
                 case 2:
                     if (ByteCount == 2) {
                         ciePaw = 256 * NextSCI_chr;
-
+                        --ByteCount;
                         // Something missing here - or not?
                     } else if (ByteCount == 1) {
                         ciePaw += NextSCI_chr;
-                        ventO2CurveData.ciePaw = (ciePaw * 0.1);
+                        ciePaw = (ciePaw * 0.1);
                         RunMode = Run_Mode;
                         --ByteCount;
                         if (NumberOfCurves > 3) CurveCounter = 3;
                         else CurveCounter = 0;
+                        // hostCom.printf("ciePaw: %.2f\n", ventO2CurveData.ciePaw);
                     }
+
+                    // We have a valid com, reset the timer:
+                     setLastMessageTime(millis());
+
                     break;
                 default:
                     break;
             }
             break;
         case Phase_Data:
-            phase = NextSCI_chr;
-            ventO2CurveData.ciePhase = phase;
+            breathPhase = NextSCI_chr;
+            // hostCom.printf("DEBUG Phase: %d\n", breathPhase);
             --ByteCount;
             RunMode = Run_Mode;
             break;
@@ -298,28 +224,7 @@ void ServoCIEData::parseCIEData(char NextSCI_chr) {
                     RunMode = End_Flag_Found;
                     break;
                 default:
-                    switch (CurveCounter) {
-                        case 0:
-                            cieFlow += int8_t(NextSCI_chr);
-                            ventO2CurveData.cieFlow = cieFlow * 0.25 - 4000.0;
-                            if (NumberOfCurves > 1) CurveCounter = 1;
-                            else CurveCounter = 0;
-                            break;
-                        case 1:
-                            cieFCO2 += int8_t(NextSCI_chr);
-                            ventO2CurveData.cieCO2 = (cieFCO2 * 0.1);
-                            if (NumberOfCurves > 2) CurveCounter = 2;
-                            else CurveCounter = 0;
-                            break;
-                        case 2:
-                            ciePaw += int8_t(NextSCI_chr);
-                            ventO2CurveData.ciePaw = (ciePaw * 0.1);
-                            if (NumberOfCurves > 3) CurveCounter = 3;
-                            else CurveCounter = 0;
-                            break;
-                        default:
-                            break;
-                    }
+
                     break;
             }
             break;
@@ -489,6 +394,7 @@ void ServoCIEData::parseRSENResponse(const char* response, size_t len) {
     hostCom.printf("servo S/N = %s\n", servoSN.c_str());
 }
 
+// SERVO serial number
 String ServoCIEData::getServoID() {
     return servoID + servoSN;
 }
@@ -503,36 +409,25 @@ bool ServoCIEData::CIE_comCheck() {
     const unsigned long TIMEOUT_MS = 500;
     unsigned long start = millis();
 
-    // // 🔹 If data already flowing, send ESC to try to break out of it
-    // if (servoCom.available() > 0) {
-    //     hostCom.println("Data already in buffer, sending ESC...");
-    //     servoCom.write(ESC);
-
-    //     unsigned long escStart = millis();
-    //     while (servoCom.available() == 0 && (millis() - escStart) < TIMEOUT_MS) {
-    //         delay(5);
-    //     }
-
-    //     if (servoCom.available() == 0) {
-    //         hostCom.println("No response after ESC");
-    //         return false; // no response to escape
-    //     }
-
-    //     // flush out whatever came back after ESC
-    //     while (servoCom.available() > 0) {
-    //         uint8_t b = servoCom.read();
-    //         hostCom.printf(" Flushed after ESC: 0x%02X\n", b);
-    //     }
-    // }
-
+    // stop any ongoing command:
+    hostCom.println("DEBUG sending esc");
+    servoCom.write(ESC);
 
     // 🔹 Clear any stale bytes in receive buffer
-    while (servoCom.available() > 0) {
-        servoCom.read();
-    }
+    hostCom.println("Clearing buffer");
+    
+    delay(200);
 
+    // flush out whatever came back after ESC
+    hostCom.printf("DEBUG Flushed after ESC ");
+    while (servoCom.available() > 0) {
+        char b = servoCom.read();
+        hostCom.printf("0x%02X ", b);
+        hostCom.print(b);
+        hostCom.print("\t");
+    }
     servoCom.write(EOT);
-    hostCom.print("Checking CIE connection, ");
+    hostCom.print("\nChecking CIE connection, ");
 
     // Wait for 4 bytes (*, CHK, DATA, EOT)
     while (servoCom.available() < 4 && (millis() - start) < TIMEOUT_MS) {
@@ -589,7 +484,6 @@ unsigned long ServoCIEData::getLastMessageTime() const {
     return lastMessageTime;
 }
 
-// 2025-08-09:
 bool ServoCIEData::CIE_setup() {
     strcpy(CMD_RTIM,  "RTIM");
     strcpy(CMD_RCTY,  "RCTY");
@@ -598,17 +492,14 @@ bool ServoCIEData::CIE_setup() {
     strcat(CMD_SDADB, concatConfigChannels(metrics, metricCount).c_str());  // Append PAYLOAD_SDADB to CMD_SDADB
     strcpy(CMD_SDADS, "SDADS"); // strcpy(PAYLOAD_SDADS, "400405408414406420410409437419");
     strcat(CMD_SDADS, concatConfigChannels(settings, settingCount).c_str());  // Append PAYLOAD_SDADB to CMD_SDADB
-    strcpy(PAYLOAD_SDADC, "000004001");
     strcpy(CMD_SDADC, "SDADC");
+    strcpy(PAYLOAD_SDADC, "000004001");
     strcat(CMD_SDADC, PAYLOAD_SDADC);  // Append PAYLOAD_SDADC to CMD_SDADC
     strcpy(CMD_RCCO,  "RCCO102");
     strcpy(CMD_RDAD,  "RDAD");
     strcpy(CMD_RADAB, "RADAB");
     strcpy(CMD_RADAS, "RADAS");
     strcpy(CMD_RADC,  "RADC");
-
-    // servoCom.write(ESC);
-    // getCIEResponse();
     
     if (CIE_comCheck()) {
         hostCom.println("CIE communication OK");
@@ -637,23 +528,25 @@ bool ServoCIEData::CIE_setup() {
     String rsenResponse = getCIEResponse();
     parseRSENResponse(rsenResponse.c_str(),rsenResponse.length() );
 
+    // breath to breats / Metrics channels
     Send_SERVO_CMD_ASCII(CMD_SDADB);
     getCIEResponse();
 
+    // settings channels
     Send_SERVO_CMD_ASCII(CMD_SDADS);
     getCIEResponse();
 
     // Curve channels
-    // Send_SERVO_CMD_ASCII(CMD_SDADC);
-    // getCIEResponse();
+    Send_SERVO_CMD_ASCII(CMD_SDADC);
+    getCIEResponse();
 
     // read config
-    // Send_SERVO_CMD_ASCII(CMD_RCCO);
-    // getCIEResponse();
+    Send_SERVO_CMD_ASCII(CMD_RCCO);
+    getCIEResponse();
 
     // read config
-    // Send_SERVO_CMD_ASCII(CMD_RDAD);
-    // getCIEResponse();
+    Send_SERVO_CMD_ASCII(CMD_RDAD);
+    getCIEResponse();
 
     Send_SERVO_CMD_ASCII(CMD_RADAB);
     getCIEResponse();
@@ -669,8 +562,6 @@ bool ServoCIEData::CIE_setup() {
     
     return true;
 }
-
-
 
 void ServoCIEData::initializeConfigs(const char* metricPath, const char* settingPath) {
     bool metricConfigLoaded = false;
@@ -711,7 +602,7 @@ void ServoCIEData::initializeConfigs(const char* metricPath, const char* setting
     }
 
     if (metricConfigLoaded) {
-        printAllMetrics();
+        printMetricsSettings();
     } else {
         hostCom.println("❌ No metric configs loaded.");
     }
@@ -723,6 +614,10 @@ void ServoCIEData::initializeConfigs(const char* metricPath, const char* setting
     }
 }
 
+uint8_t ServoCIEData:: getBreathPhase() {
+    // hostCom.println("DEBUG - phase was checked");
+    return breathPhase;
+}
 // -------------------- Config helpers --------------------
 
 String ServoCIEData::concatConfigChannels(const Configs configs[], int size) {
@@ -732,7 +627,6 @@ String ServoCIEData::concatConfigChannels(const Configs configs[], int size) {
     }
     return result;
 }
-
 
 // -------------------- Metric Config --------------------
 
@@ -836,7 +730,7 @@ bool ServoCIEData::syncMetricSPIFFSToSD(const char* path) {
     return true;
 }
 
-void ServoCIEData::printAllMetrics() {
+void ServoCIEData::printMetricsSettings() {
     hostCom.printf("\nMetrics configuration:\n");
     for (int i = 0; i < metricCount; i++) {
         hostCom.printf("%s:\t%s [%s]\tScale: %.4f\tOffset: %.2f\n",
@@ -1005,17 +899,29 @@ void ServoCIEData::scaleCIEData(const float* unscaledArray, float* scaledArray, 
 };
 
 
-String ServoCIEData::getScaledValuesAsString(const float* scaledArray, int count) {
-    String result = "";
-    for (int i = 0; i < count; ++i) {
-        result += String(scaledArray[i], 4); // 4 decimal places
-        result += (i < count - 1) ? '\t' : '\n';
+String ServoCIEData::getScaledValuesAsString(const Configs* configsArray, int count, bool includeHeader) {
+    String values = "";
+    String header = "";
+    for (int i = 0; i < count; i++) {
+        header += configsArray[i].label;
+        if ((int)configsArray[i].unscaled == 32511) {
+            values += "No Valid Data";
+        } else {
+            values += String(configsArray[i].scaled, 2); // 2 decimal places
+        }
+        // Add delimiter except for last item
+        if (i < count - 1) {
+            header += '\t';
+            values += '\t';
+        }
+        // values += (i < count - 1) ? '\t' : '\n';
     }
-    return result;
+    if (includeHeader) {
+        return header + "\n" + values + "\n";
+    } else {
+        return values + "\n";
+    }
 }
-
-// String metricsStr = getScaledValuesAsString(MetricScaled, metricCount);
-// String settingsStr = getScaledValuesAsString(SettingsScaled, settingCount);
 
 String ServoCIEData::getChannelsAsString(const Configs* configsArray, int count) {
     String result = ""; 
@@ -1044,7 +950,3 @@ String ServoCIEData::getUnitsAsString(const Configs* configsArray, int count) {
     return result;
 }
 
-// String metricsLabels = getLabelsAsString(metrics, metricCount);
-// String metricsUnits = getUnitsAsString(metrics, metricCount);
-// String settingsLabels = getLabelsAsString(settings, settingCount);
-// String settingsUnits = getUnitsAsString(settings, settingCount);

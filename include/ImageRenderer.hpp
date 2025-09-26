@@ -14,6 +14,7 @@ public:
   void drawSwatch(int x, int y, uint16_t color, const char *label, bool  rounded = false);
   void drawSDStatusIndicator(bool isPresent);
   void drawCOMStatusIndicator(bool isPresent);
+  void drawBreathPhase(uint8_t breathPhase, int x, int y);
 
   void begin();                     // Initialize display
   void clear();                     // Clear screen

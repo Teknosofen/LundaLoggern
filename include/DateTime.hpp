@@ -13,22 +13,22 @@ public:
              bool valid = true);
 
     // Accessors
-    int  year()   const { return _year; }
-    int  month()  const { return _month; }
-    int  day()    const { return _day; }
-    int  hour()   const { return _hour; }
-    int  minute() const { return _minute; }
-    int  second() const { return _second; }
+    int  year()    const { return _year; }
+    int  month()   const { return _month; }
+    int  day()     const { return _day; }
+    int  hour()    const { return _hour; }
+    int  minute()  const { return _minute; }
+    int  second()  const { return _second; }
     bool isValid() const { return _valid; }
 
     // Mutators
-    void setYear(int v)   { _year = v; }
-    void setMonth(int v)  { _month = v; }
-    void setDay(int v)    { _day = v; }
-    void setHour(int v)   { _hour = v; }
+    void setYear(int v)   { _year =   v; }
+    void setMonth(int v)  { _month =  v; }
+    void setDay(int v)    { _day =    v; }
+    void setHour(int v)   { _hour =   v; }
     void setMinute(int v) { _minute = v; }
     void setSecond(int v) { _second = v; }
-    void setValid(bool v) { _valid = v; }
+    void setValid(bool v) { _valid =  v; }
 
     // Helpers
     // Human-readable: "YYYY-MM-DD HH:MM:SS"

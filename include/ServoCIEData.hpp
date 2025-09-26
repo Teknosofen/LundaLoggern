@@ -7,30 +7,11 @@
 #include <SPIFFS.h>
 #include <string>
 #include "DateTime.hpp"
+#include "SDManager.hpp"  // Include the header for SDManager
 
 extern DateTime dateTime;
 
-// when in stdvy, the CIE does not send any data, so we need to poll it
-// there seems to be an err message sent that could deserve a dedicated state?
-
-// #define hostCom Serial          // potential duplicate
-
-// new 2025-08-04
-// struct Metric {
-//     String channel;
-//     String label;
-//     String unit;
-//     float scaleFactor;
-//     float offset;
-// };
-
-// struct Setting {
-//     String channel;
-//     String label;
-//     String unit;
-//     float scaleFactor;
-//     float offset;
-// };
+class SDManager; // forward declaration
 
 struct Configs {
     String channel;
@@ -38,15 +19,14 @@ struct Configs {
     String unit;
     float scaleFactor;
     float offset;
-    float unscaled;   // raw incoming value
+    uint16_t unscaled;   // raw incoming value
     float scaled;     // scaled/calibrated value
 };
-
 
 class ServoCIEData {
 
 public:
-    ServoCIEData();
+    ServoCIEData(SDManager* manager);
     bool begin();
     void parseCIEData(char NextSCI_chr);
     String getCIEResponse();
@@ -101,7 +81,8 @@ public:
     bool loadMetricFromSPIFFS(const char* path);
     bool syncMetricSDToSPIFFS(const char* path);
     bool syncMetricSPIFFSToSD(const char* path);
-    void printAllMetrics();
+    void printMetricsSettings();
+   
 
     // Setting config
     bool loadSettingFromSD(const char* path);
@@ -114,12 +95,16 @@ public:
     void scaleCIEData(const float* unscaledArray, float* scaledArray, int count, const Configs* configsArray);
     String getUnitsAsString(const Configs* configsArray, int count) ;
     String getLabelsAsString(const Configs* configsArray, int count);
-    String getScaledValuesAsString(const float* scaledArray, int count);
+    String getScaledValuesAsString(const Configs* configsArray, int count, bool includeHeader = false);
     String getChannelsAsString(const Configs* configsArray, int count);
 
     String getServoID();    // returns servo type and serial num
+    uint8_t getBreathPhase();   // return the present breath state, insp, exp or pause
 
 private:
+
+    SDManager* sdManager;  // Pointer to SDManager instan
+
     // communication timing stuff
     bool comOpen = false;
     unsigned long lastMessageTime = 0;
@@ -184,6 +169,8 @@ private:
     int cieFCO2 = 0;
     int ciePaw = 0;
     int cieEdi = 0;
+
+    uint8_t breathPhase = 0;
 
     unsigned int MetricNo; // count which metric is currently being received
     unsigned int settingsNo; // count which setting is currently being received
