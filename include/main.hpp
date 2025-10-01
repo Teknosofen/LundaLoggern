@@ -29,6 +29,9 @@
 #define LCD_WIDTH  320
 #define LCD_HEIGHT 170
 
+#define INTERACTION_BUTTON_PIN 14 // GPIO14, key 2
+#define LONG_KEY_PRESS_DURATION 1000 // long press, in [ms]
+
 // #define SDCARD_CS_PIN 5
 
 #define SET_LOOP_TIME 200000      // slow loop update in [us]
@@ -57,6 +60,6 @@ const unsigned long INIT_INTERVAL_MS = 5000; // Retry INIT every 5 seconds
 #include "ServoCIEData.hpp"
 // const char* MetricConfigPath = "/MetricConfig.txt";
 // const char* SettingConfigPath = "/SettingConfig.txt";
-
+#include "Button.hpp"
 
 #endif // MAIN_HPP

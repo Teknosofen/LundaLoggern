@@ -84,7 +84,7 @@ void ServoCIEData::parseCIEData(char NextSCI_chr) {
 
                 String tempFileName = sdManager->getCurrentFileName('M');
                 sdManager->appendData(tempStr, 'M');
-                
+                hostCom.println(tempStr);
                 // We have a valid com, reset the timer:
                 setLastMessageTime(millis());
                 
@@ -110,7 +110,7 @@ void ServoCIEData::parseCIEData(char NextSCI_chr) {
 
                 String tempFileName = sdManager->getCurrentFileName('S');
                 sdManager->appendData(tempStr, 'S');
-                // hostCom.print(tempStr);
+                hostCom.print(tempStr);
                 
                 // We have a valid com, reset the timer:
                 setLastMessageTime(millis());
@@ -131,12 +131,17 @@ void ServoCIEData::parseCIEData(char NextSCI_chr) {
                         --ByteCount;
                     } else if (ByteCount == 1) {
                         cieFlow += NextSCI_chr;
+                        // hostCom.printf("DEBUG FLOW %d\t",cieFlow);
+                        // float cieFlowFloat = cieFlow * 0.25 - 4000.0;
                         cieFlow = cieFlow * 0.25 - 4000.0;
+                        // hostCom.printf("DEBUG FLOW %.2f\n",cieFlowFloat);
+
                         RunMode = Run_Mode;
                         --ByteCount;
                         if (NumberOfCurves > 1) CurveCounter = 1;
                         else CurveCounter = 0;
-                        // hostCom.printf("cieFlow: %.2f\t", ventO2CurveData.cieFlow);
+                        // hostCom.printf("cieFlow: %.2f\t", cieFlow);
+                        // hostCom.println(cieFlow);
                     }
                     break;
                 case 1:
@@ -150,7 +155,7 @@ void ServoCIEData::parseCIEData(char NextSCI_chr) {
                         --ByteCount;
                         if (NumberOfCurves > 2) CurveCounter = 2;
                         else CurveCounter = 0;
-                        // hostCom.printf("cieCO2: %.2f\t", ventO2CurveData.cieCO2);
+                        // hostCom.printf("cieCO2: %.2f\t", cieFCO2);
                     }
                     break;
                 case 2:
@@ -165,7 +170,7 @@ void ServoCIEData::parseCIEData(char NextSCI_chr) {
                         --ByteCount;
                         if (NumberOfCurves > 3) CurveCounter = 3;
                         else CurveCounter = 0;
-                        // hostCom.printf("ciePaw: %.2f\n", ventO2CurveData.ciePaw);
+                        // hostCom.printf("ciePaw: %.2f\n", ciePaw);
                     }
 
                     // We have a valid com, reset the timer:

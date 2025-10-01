@@ -40,6 +40,7 @@ WifiApServer WiFiserver("LundaLoggern", ""); //"neonatal");
 
 DateTime dateTime; // Global DateTime object
 
+Button interactionKey1(INTERACTION_BUTTON_PIN);  // GPIO14 Key 2
 
 void setup() {
   hostCom.begin(115200); // Initialize hostCom for debugging
@@ -100,11 +101,13 @@ void setup() {
   WiFiserver.enableSdFileDownloads(true);
   WiFiserver.enableSdFileDelete(true);
 
-  WiFiserver.begin();
-  hostCom.printf("Access Point IP: %s\n", WiFiserver.getApIpAddress());
-  // hostCom.println(WiFiserver.getApIpAddress());
-  
+  // WiFiserver.begin();
+  // hostCom.printf("Access Point IP: %s\n", WiFiserver.getApIpAddress());
+  renderer.drawString("WiFi disabled", 10, 50, 2); // Print another message on the display
+    
   sd.listRoot();  // List all files in root
+
+  interactionKey1.begin();
 }
 
 void loop() {
@@ -181,4 +184,36 @@ void loop() {
   }
 
   WiFiserver.handleClient();  // This keeps the web server alive
+  
+  interactionKey1.update();
+
+  if (interactionKey1.wasPressed()) {
+    hostCom.println("interactionKey1 pressed");
+  }
+
+  if (interactionKey1.wasReleased()) {
+      if (interactionKey1.wasLongPress()) {
+          hostCom.println("Key1 long press (>1s)");
+          WiFiserver.begin();
+          hostCom.println("Started WiFi");
+          hostCom.printf("Access Point IP: %s\n", WiFiserver.getApIpAddress());
+          renderer.drawString(WiFiserver.getApIpAddress(), 10, 50, 2); // Print another message on the display
+
+          // Add dispaly update
+
+      } else {
+        hostCom.println("interactionKey1 short press");
+          
+        // Stop WiFi Access Point
+        WiFi.softAPdisconnect(true);  // true = erase settings
+        WiFi.mode(WIFI_OFF);          // turn off WiFi radio
+        hostCom.println("WiFi Access Point stopped");
+        renderer.drawString("WiFi disabled", 10, 50, 2); // Print another message on the display
+
+        // Add display update
+
+      }
+  }
+
+
 }

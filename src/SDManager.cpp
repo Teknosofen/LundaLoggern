@@ -230,7 +230,7 @@ void SDManager::appendData(String data, char dataType) {
         return;
     }
 
-    file.println(data);
+    file.print(data); // \n is present in data-string already
     file.close();
 }
 

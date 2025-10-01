@@ -5,7 +5,7 @@ ImageRenderer::ImageRenderer(TFT_eSPI &display) : tft(display) {}
 
 void ImageRenderer::begin() {
     tft.init();
-    tft.setRotation(1); // Set display orientation
+    tft.setRotation(3); // Set display orientation
     
     tft.fillScreen(TFT_LOGOBACKGROUND); // Clear the display
     tft.setTextColor(TFT_WHITE, TFT_LOGOBACKGROUND  ); // Set text color and background
