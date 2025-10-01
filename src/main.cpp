@@ -36,7 +36,7 @@ SDManager sd(hspi, HSPI_CS, &dateTime); // Pass your CS pin here
 
 ServoCIEData servoCIEData(&sd);
 
-WifiApServer WiFiserver("LundaLoggern", ""); //"neonatal");
+WifiApServer myWiFiServer("LundaLoggern", ""); //"neonatal");
 
 DateTime dateTime; // Global DateTime object
 
@@ -91,15 +91,16 @@ void setup() {
   hostCom.println("Initializing CIE com:");
   servoCIEData.begin();
 
-  // WiFiserver.setLogoData(lundaLogo, 100, 100);
-  WiFiserver.setTextAndValues("LundaLogger", 23.5, 67.8, 1013.2, 3.7);
-  WiFiserver.setLabel(0, "Temp");
-  WiFiserver.setLabel(1, "Humidity");
-  WiFiserver.setLabel(2, "Pressure");
-  WiFiserver.setLabel(3, "Battery");
+  // myWiFiserver.setLogoData(lundaLogo, 100, 100);
+  myWiFiServer.setText("LundaLogger");
+  // myWiFiServer.setTextAndValues("LundaLogger", 23.5, 67.8, 1013.2, 3.7);
+  // myWiFiServer.setLabel(0, "Temp");
+  // myWiFiServer.setLabel(1, "Humidity");
+  // myWiFiServer.setLabel(2, "Pressure");
+  // myWiFiServer.setLabel(3, "Battery");
 
-  WiFiserver.enableSdFileDownloads(true);
-  WiFiserver.enableSdFileDelete(true);
+  myWiFiServer.enableSdFileDownloads(true);
+  myWiFiServer.enableSdFileDelete(true);
 
   // WiFiserver.begin();
   // hostCom.printf("Access Point IP: %s\n", WiFiserver.getApIpAddress());
@@ -123,8 +124,8 @@ void loop() {
     renderer.pushFullImage(220, 40, 100, 100, lundaLogo);
     renderer.drawSDStatusIndicator(sd.isCardPresent());
     renderer.drawMainScreen();
-    renderer.drawString(WiFiserver.getApIpAddress(), 10, 50, 2); // Print another message on the display
-    hostCom.println("LundaLogger loop now initialized");
+    renderer.drawString(myWiFiServer.getApIpAddress(), 10, 50, 2); // Print another message on the display
+    hostCom.println("LundaLogger now initialized");
   } // init loop
 
   static uint32_t loopStartTime = micros(); // Record the start time of the loop
@@ -133,7 +134,7 @@ void loop() {
     loopStartTime = micros(); // Reset the start time for the next loop
 
     // renderer.drawMainScreen();
-    // renderer.drawString(WiFiserver.getApIpAddress(), 10, 50, 2); // Print another message on the display
+    // renderer.drawString(myWiFiserver.getApIpAddress(), 10, 50, 2); // Print another message on the display
     renderer.drawDateTimeAt(dateTime.getRTC(), 10, 160); // Draw current RTC time
     renderer.drawServoID(servoCIEData.getServoID(), 10, 140);
     renderer.drawCOMStatusIndicator(servoCIEData.isComOpen());
@@ -170,6 +171,7 @@ void loop() {
             servoCIEData.setComOpen(true);
             servoCIEData.setLastMessageTime(now); // Reset message timer
             servoCIEData.CIE_setup();
+            myWiFiServer.setText(servoCIEData.getServoID());
         } else {
             hostCom.println("❌ CIE communication re-check failed.");
         }
@@ -183,7 +185,7 @@ void loop() {
     servoCIEData.parseCIEData(inByte);
   }
 
-  WiFiserver.handleClient();  // This keeps the web server alive
+  myWiFiServer.handleClient();  // This keeps the web server alive
   
   interactionKey1.update();
 
@@ -194,10 +196,10 @@ void loop() {
   if (interactionKey1.wasReleased()) {
       if (interactionKey1.wasLongPress()) {
           hostCom.println("Key1 long press (>1s)");
-          WiFiserver.begin();
+          myWiFiServer.begin();
           hostCom.println("Started WiFi");
-          hostCom.printf("Access Point IP: %s\n", WiFiserver.getApIpAddress());
-          renderer.drawString(WiFiserver.getApIpAddress(), 10, 50, 2); // Print another message on the display
+          hostCom.printf("Access Point IP: %s\n", myWiFiServer.getApIpAddress());
+          renderer.drawString(myWiFiServer.getApIpAddress(), 10, 50, 2); // Print another message on the display
 
           // Add dispaly update
 

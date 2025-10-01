@@ -195,44 +195,111 @@ void SDManager::listRoot() {
 }
 
 
-String SDManager::getCurrentFileName(char dataType) {
-    DateTime now = dateTime->getRTC();
+bool SDManager::updateFileNameIfChanged(char dataType, String &outFileName) {
+    // Generate filename based on timestamp and dataType
+    time_t now = time(nullptr);
+    struct tm *timeinfo = localtime(&now);
 
-    // Determine 12h interval: 00 for midnight to noon, 12 for noon to midnight
-    int interval = now.hour() < 12 ? 0 : 12;
+    char buffer[32];
+    strftime(buffer, sizeof(buffer), "%Y%m%d_%H%M", timeinfo);
+    String generatedName = String(buffer);
 
-    // // Format: TDDMMHH.TXT (T = M or S, DD = day, MM = month, HH = hour)
-    // char filename[13]; // 8.3 format: max 12 chars including null terminator
-    // snprintf(filename, sizeof(filename), "%c%02d%02d%02d.TXT",
-    //          dataType, now.day(), now.month(), interval);
+    if (dataType == 'M') {
+        generatedName = "metrics_" + generatedName + ".csv";
+    } else if (dataType == 'S') {
+        generatedName = "settings_" + generatedName + ".csv";
+    }
 
+    generatedName = "/" + generatedName;
+    outFileName = generatedName;
 
-    // Format: TDDMMHH.TXT (T = M or S, DD = day, MM = month, HH = hour with leading zero)
-    char filename[13]; // 8.3 format: max 12 chars including null terminator
-    snprintf(filename, sizeof(filename), "%c%02d%02d%02d.TXT",
-             dataType, now.month(),  now.day(), now.hour());
-
-
-    return String(filename);
+    return (generatedName != currentFileName);
 }
 
+
 void SDManager::appendData(String data, char dataType) {
-    String newFileName = getCurrentFileName(dataType);
-    if (newFileName != currentFileName) {
+    String newFileName;
+    bool isNewFile = updateFileNameIfChanged(dataType, newFileName);
+
+    if (isNewFile) {
         currentFileName = newFileName;
     }
-    String fullPath  = "/" + currentFileName;
-    // hostCom.println("DEBUG filename: " + fullPath );
-    File file = SD.open(fullPath, FILE_APPEND);
+
+    File file = SD.open(currentFileName, FILE_APPEND);
     if (!file) {
         Serial.println("Failed to open file for appending");
-        hostCom.println(fullPath);
+        hostCom.println(currentFileName);
         return;
     }
 
-    file.print(data); // \n is present in data-string already
+    // if (isNewFile) {
+    //     if (dataType == 'M') {
+    //         file.println("Timestamp,Temperature,Humidity,Pressure,Battery");
+    //     } else if (dataType == 'S') {
+    //         file.println("Timestamp,Setting1,Setting2,Setting3"); // placeholder
+    //     }
+    // }
+
+    file.println(data);
     file.close();
 }
+
+// String SDManager::getCurrentFileName(char dataType) {
+//     DateTime now = dateTime->getRTC();
+
+//     // Determine 12h interval: 00 for midnight to noon, 12 for noon to midnight
+//     int interval = now.hour() < 12 ? 0 : 12;
+
+//     // // Format: TDDMMHH.TXT (T = M or S, DD = day, MM = month, HH = hour)
+//     // char filename[13]; // 8.3 format: max 12 chars including null terminator
+//     // snprintf(filename, sizeof(filename), "%c%02d%02d%02d.TXT",
+//     //          dataType, now.day(), now.month(), interval);
+
+
+//     // Format: TDDMMHH.TXT (T = M or S, DD = day, MM = month, HH = hour with leading zero)
+//     char filename[13]; // 8.3 format: max 12 chars including null terminator
+//     snprintf(filename, sizeof(filename), "%c%02d%02d%02d.TXT",
+//              dataType, now.month(),  now.day(), now.hour());
+
+
+//     return String(filename);
+// }
+
+// void SDManager::appendData(String data, char dataType) {
+//     String newFileName = "/" + getCurrentFileName(dataType);
+//     bool newFile = false;
+//     if (newFileName != currentFileName) { // we have a new file
+//         currentFileName = newFileName;
+//         newFile = true;
+//     }
+    
+//     // hostCom.println("DEBUG filename: " + fullPath );
+//     File file = SD.open(currentFileName, FILE_APPEND);
+//     if (!file) {
+//         Serial.println("Failed to open file for appending");
+//         hostCom.println(currentFileName);
+//         return;
+//     }
+
+//     if (newFile) {
+//         // Write header line
+//         if (dataType == 'M') {
+//           // fixa en wrapper som returnerar Metrics eller Settings
+          
+//           // ServoCIEData.getLabelsAsString(metrics, metricCount);
+//           // getUnitsAsString(metrics, metricCount);
+//             file.println("Timestamp,Temperature,Humidity,Pressure,Battery");
+//         } else if (dataType == 'S') {
+//           // getLabelsAsString(settings, settingCount);
+//           // getUnitsAsString(settings, settingCount);
+          
+//         }
+//         newFile = false;
+//     }
+
+//     file.println(data);
+//     file.close();
+// }
 
 
 void SDManager::deleteAllFiles(const char* path) {

@@ -10,6 +10,7 @@
 #include "SDManager.hpp"  // Include the header for SDManager
 
 extern DateTime dateTime;
+extern WifiApServer WiFiserver; // only used to set text on home page
 
 class SDManager; // forward declaration
 
@@ -19,8 +20,9 @@ struct Configs {
     String unit;
     float scaleFactor;
     float offset;
-    uint16_t unscaled;   // raw incoming value
-    float scaled;     // scaled/calibrated value
+    uint16_t unscaled;      // raw incoming value
+    float scaled;           // scaled/calibrated value
+    bool active = true;     // default to true unless specified otherwise
 };
 
 class ServoCIEData {
@@ -48,7 +50,7 @@ public:
     void CRC_calcASCII(const char* localstring, char* outHex); // New CRC function: returns 2 ASCII hex characters via outHex
    
     String concatConfigChannels(const Configs configs[], int numConfigs);
-    void initializeConfigs(const char* metricPath, const char* settingPath);
+    void initializeConfigs(const char* metricPath, const char* settingPath, const char* curvePath = nullptr);
    
     // Communication status
     void setComOpen(bool state);
@@ -65,6 +67,7 @@ public:
     // Configs
     static const int MaxMetrics = 20;
     static const int MaxSettings = 20;
+    static const int MaxCurves = 5;
 
     Configs metrics[MaxMetrics];
     int metricCount = 0;
@@ -74,21 +77,34 @@ public:
     int settingCount = 0;
     bool settingConfigLoaded = false;
 
+    Configs curves[MaxCurves];
+    int curveCount = 0;
+    bool curveConfigLoaded = false;
+
+
     // bool begin();  // Initializes SPIFFS
 
+    // config handling
+    bool loadConfigFromSD(const char* path);
+    bool loadConfigFromSPIFFS(const char* path);
+    bool syncConfigSDToSPIFFS(const char* path);
+    bool syncConfigSPIFFSToSD(const char* path);
+    // void printAllConfig(const Configs* configsArray, int count);
+
+    void printAllCurveConfigs();
     // Metric config
-    bool loadMetricFromSD(const char* path);
-    bool loadMetricFromSPIFFS(const char* path);
-    bool syncMetricSDToSPIFFS(const char* path);
-    bool syncMetricSPIFFSToSD(const char* path);
-    void printMetricsSettings();
+    // bool loadMetricFromSD(const char* path);
+    // bool loadMetricFromSPIFFS(const char* path);
+    // bool syncMetricSDToSPIFFS(const char* path);
+    // bool syncMetricSPIFFSToSD(const char* path);
+    void printAllMetricsConfigs();
    
 
     // Setting config
-    bool loadSettingFromSD(const char* path);
-    bool loadSettingFromSPIFFS(const char* path);
-    bool syncSettingSDToSPIFFS(const char* path);
-    bool syncSettingSPIFFSToSD(const char* path);
+    // bool loadSettingFromSD(const char* path);
+    // bool loadSettingFromSPIFFS(const char* path);
+    // bool syncSettingSDToSPIFFS(const char* path);
+    // bool syncSettingSPIFFSToSD(const char* path);
     void printAllSettings();
 
     // void scaleAll(int metricSize, int settingSize);
@@ -110,8 +126,9 @@ private:
     unsigned long lastMessageTime = 0;
     unsigned long lastInitAttempt = 0;
 
-    bool parseMetricLine(const String& line, Configs& m);
-    bool parseSettingLine(const String& line, Configs& s);
+    // bool parseMetricLine(const String& line, Configs& m);
+    // bool parseSettingLine(const String& line, Configs& s);
+    bool parseConfigLine(const String& line, Configs& c);
 
     // Generic ASCII response parser with optional status flag
     String parseASCIIResponse(const char* response, size_t len, bool* statusError = nullptr);
@@ -165,36 +182,40 @@ private:
     int Error_info;
     char inByte;     // collects the latest char from the ventilator
 
-    int cieFlow = 0; // stores the flow signal received from CIE
+    uint16_t cieCurve1 = 0; // stores the flow signal received from CIE
+    uint16_t cieCurve2 = 0; // stores the CO2 signal received from CIE
+    uint16_t cieCurve3 = 0; // stores the airway pressure signal received from CIE
+    uint16_t cieCurve4 = 0; // stores the Edi signal received from CIE
+
+    int cieFlow = 0;
     int cieFCO2 = 0;
     int ciePaw = 0;
     int cieEdi = 0;
 
     uint8_t breathPhase = 0;
 
-    unsigned int MetricNo; // count which metric is currently being received
-    unsigned int settingsNo; // count which setting is currently being received
-
-    // curves / waveforms
+    unsigned int MetricNo = 0; // count which metric is currently being received
+    unsigned int settingsNo = 0; // count which setting is currently being received
     int CurveCounter = 0; // Count which curve is presently being managed
     #define NumberOfCurves 3 // Totalnumber of curves to receive from SCI/CIE
+    // should use curveCount instead
 
-    // struct to store flow, CO2, and airway pressure curve data from the ventilator
-    // Message ID 20, data rate about 100Hz
-    // Åke L 2021-04-20
-    //
-    #define ventO2CurveDataMsgID 20
-    typedef struct  {
-                                                                // Airway flow is channel 0,  is channel +2500E-004, +4000E+000, 02, CU
-    float cieFlow = 0.0;                                      // 100 Hz scaled flow curve sample [ml/s], 4 bytes
-                                                                // CO2 is channel 4, +1000E-004, +0000E+000, 07, CU
-    float cieCO2 = 0.0;                                       // 100 Hz scaled CO2 curve sample [%], 4 bytes
-                                                                // Paw is channel 1, +1000E-004, +2000E-001, 04, CU
-    float ciePaw = 0.0;                                       // 100 Hz scaled airway pressure curve sample [cmH2O], 4 bytes
-    uint32_t ciePhase = 0;                                    // phase info, updated when changed but available at each 100 Hz package, 4 bytes
-    } VentO2CurveDataStruct;
-    VentO2CurveDataStruct ventO2CurveData;
-    VentO2CurveDataStruct* ventO2CurveDataPtr = &ventO2CurveData;
+    // // struct to store flow, CO2, and airway pressure curve data from the ventilator
+    // // Message ID 20, data rate about 100Hz
+    // // Åke L 2021-04-20
+    // //
+    // #define ventO2CurveDataMsgID 20
+    // typedef struct  {
+    //                                                             // Airway flow is channel 0,  is channel +2500E-004, +4000E+000, 02, CU
+    // float cieFlow = 0.0;                                      // 100 Hz scaled flow curve sample [ml/s], 4 bytes
+    //                                                             // CO2 is channel 4, +1000E-004, +0000E+000, 07, CU
+    // float cieCO2 = 0.0;                                       // 100 Hz scaled CO2 curve sample [%], 4 bytes
+    //                                                             // Paw is channel 1, +1000E-004, +2000E-001, 04, CU
+    // float ciePaw = 0.0;                                       // 100 Hz scaled airway pressure curve sample [cmH2O], 4 bytes
+    // uint32_t ciePhase = 0;                                    // phase info, updated when changed but available at each 100 Hz package, 4 bytes
+    // } VentO2CurveDataStruct;
+    // VentO2CurveDataStruct ventO2CurveData;
+    // VentO2CurveDataStruct* ventO2CurveDataPtr = &ventO2CurveData;
 
     // CIE constants
     // -------------

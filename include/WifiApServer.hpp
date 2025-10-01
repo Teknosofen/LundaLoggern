@@ -12,6 +12,7 @@ public:
 
     void setLogoData(const uint16_t* logoArray, size_t width, size_t height);
     void setTextAndValues(String text, float v1, float v2, float v3, float v4);
+    void setText(String text);
     void setValue(int index, float value);
     void setLabel(int index, String label);
 

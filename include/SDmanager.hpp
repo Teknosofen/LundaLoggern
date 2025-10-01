@@ -20,7 +20,8 @@ public:
   void listRoot();
   void deleteAllFiles(const char* path  = "/");
 
-  String getCurrentFileName(char dataType);
+  // String getCurrentFileName(char dataType);
+  bool updateFileNameIfChanged(char dataType, String &outFileName);
   void appendData(String data, char dataType);
 
   enum SDState {

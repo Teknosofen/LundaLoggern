@@ -6,6 +6,7 @@
 #include "main.hpp"
 
 extern SDManager sd;
+extern WifiApServer WiFiserver;
 
 WebServer server(80);
 
@@ -31,6 +32,10 @@ void WifiApServer::begin() {
 
 void WifiApServer::handleClient() {
     server.handleClient();
+}
+
+void WifiApServer::setText(String text) {
+    _text = text;
 }
 
 void WifiApServer::setTextAndValues(String text, float v1, float v2, float v3, float v4) {
@@ -70,60 +75,6 @@ void WifiApServer::setupWebServer() {
 void WifiApServer::handleRoot() {
     server.send(200, "text/html", generateHtmlPage());
 }
-
-// // Note: The file manager handles both download and delete actions.
-// void WifiApServer::handleFileManager() {
-    
-//     File root = SD.open("/");
-//     File file = root.openNextFile();
-
-//     String html = "<!DOCTYPE html><html><head><title>File Manager</title>";
-//     html += "<style>";
-//     html += "table { border-collapse: collapse; width: 100%; max-width: 600px; }";
-//     html += "th, td { padding: 8px; border: 1px solid #ccc; text-align: left; }";
-//     html += "th { background-color: #f0f0f0; }";
-//     html += "</style>";
-//     html += "<script>";
-//     html += "function confirmDelete(event) {";
-//     html += "  if (!confirm('Are you sure you want to delete the selected files?')) {";
-//     html += "    event.preventDefault();";
-//     html += "  }";
-//     html += "}";
-//     html += "function toggleAll(source) {";
-//     html += "  let checkboxes = document.querySelectorAll('input[name=\"file\"]');";
-//     html += "  for (let cb of checkboxes) { cb.checked = source.checked; }";
-//     html += "}";
-//     html += "</script></head><body>";
-
-//     html += "<h2>File Manager</h2>";
-//     html += "<form method='POST' action='/delete' onsubmit='confirmDelete(event)'>";
-//     html += "<table><tr>";
-//     html += "<th><input type='checkbox' onclick='toggleAll(this)'></th>";
-//     html += "<th>File</th><th>Size (KB)</th></tr>";
-
-//     while (file) {
-//         if (!file.isDirectory()) {
-//             String name = String(file.name());
-//             size_t sizeKB = file.size() / 1024;
-//             html += "<tr>";
-//             html += "<td><input type='checkbox' name='file' value='" + name + "'></td>";
-//             html += "<td>" + name + "</td>";
-//             html += "<td>" + String(sizeKB) + "</td>";
-//             html += "</tr>";
-//         }
-//         file = root.openNextFile();
-//     }
-
-//     html += "</table><br>";
-//     html += "<button type='submit' formaction='/download' formmethod='GET'>Download Selected</button> ";
-//     html += "<button type='submit'>Delete Selected</button>";
-//     html += "</form>";
-
-//     html += "<br><br><a href='/'>Back to Main Page</a>";
-//     html += "</body></html>";
-
-//     server.send(200, "text/html", html);
-// }
 
 void WifiApServer::handleFileManager() {
     File root = SD.open("/");
@@ -199,9 +150,6 @@ void WifiApServer::handleFileManager() {
 
     server.send(200, "text/html", html);
 }
-
-
-
 
 
 void WifiApServer::handleFileDownload() {
@@ -366,106 +314,4 @@ String WifiApServer::generateHtmlPage() {
 }
 
 
-// String WifiApServer::generateHtmlPage() {
-//     String html = "<!DOCTYPE html><html><head><title>LundaLogger Status</title></head><body>";
 
-//   // --- SD Card Status ---
-//     sd.updateCardStatus();
-//     bool sdOk = sd.isCardPresent();
-
-//     String sdStatusHtml;
-
-//     if (sdOk) {
-//         uint64_t totalBytes = SD.cardSize();
-//         uint64_t usedBytes  = SD.usedBytes();
-
-//         float totalMb = totalBytes / (1024.0 * 1024.0);
-//         float usedMb  = usedBytes  / (1024.0 * 1024.0);
-//         float freeMb = totalMb - usedMb;
-
-//         sdStatusHtml += F("<div style='");
-//         sdStatusHtml += F("background-color: #e0f8e0; color: #207520;");
-//         sdStatusHtml += F("border: 1px solid #207520;");
-//         sdStatusHtml += F("padding: 10px; text-align: center; font-weight: normal;");
-//         sdStatusHtml += F("margin-bottom: 10px;'>");
-//         // sdStatusHtml += "<strong>SD OK</strong>  - Size: " + String(totalMb, 1) + " MB, Used: " + String(usedMb, 1) + " MB";
-//         sdStatusHtml += "<strong>SD OK</strong> - Size: " + String(totalMb, 1) + 
-//                 " MB, Used: " + String(usedMb, 1) + 
-//                 " MB, Free: " + String(freeMb, 1) + " MB";
-
-//         sdStatusHtml += "</div>";
-//     } else {
-//         sdStatusHtml += F("<div style='");
-//         sdStatusHtml += F("background-color: #fdd; color: #a00000;");
-//         sdStatusHtml += F("border: 1px solid #a00000;");
-//         sdStatusHtml += F("padding: 10px; text-align: center; font-weight: bold;");
-//         sdStatusHtml += F("margin-bottom: 10px;'>");
-//         sdStatusHtml += "<strong>SD FAIL</strong> ";
-//         sdStatusHtml += "</div>";
-//     }
-
-//     html += sdStatusHtml;
-
-//     // // --- Logo with title on top ---
-//     // html += "<div style='";
-//     // html += "background-image: url(\"/logo\");";
-//     // html += "background-size: contain;";
-//     // html += "background-repeat: no-repeat;";
-//     // html += "background-position: top center;";
-//     // html += "text-align: center;";
-//     // html += "padding: 150px 20px 50px;";
-//     // html += "font-size: 32px;";
-//     // html += "font-weight: bold;";
-//     // html += "color: black;";
-//     // html += "'>";
-//     // html += "LundaLogger";
-//     // html += "</div><br>";
-
-//     // --- Title with text shadow above logo ---
-//     html += "<div style='";
-//     html += "text-align: center;";
-//     html += "padding: 30px 20px 20px;";
-//     html += "'>";
-
-//     // Title with text-shadow
-//     html += "<div style='";
-//     html += "font-size: 32px;";
-//     html += "font-weight: bold;";
-//     html += "color: black;";
-//     html += "text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.3);";
-//     html += "'>";
-//     html += "LundaLogger";
-//     html += "</div>";
-
-//     // Logo as background beneath
-//     html += "<div style='";
-//     html += "background-image: url(\"/logo\");";
-//     html += "background-size: contain;";
-//     html += "background-repeat: no-repeat;";
-//     html += "background-position: top center;";
-//     html += "height: 180px;";
-//     html += "'>";
-//     html += "</div>";
-
-//     html += "</div><br>";
-
-
-
-//     html += "<ul>";
-//     for (int i = 0; i < 4; ++i) {
-//         html += "<li>" + _labels[i] + ": " + String(_values[i]) + "</li>";
-//     }
-//     html += "</ul>";
-
-//     // Show logo
-//     // html += "<img src='/logo' alt='Logo' style='max-width:100%; height:auto;'><br>";
-
-//     if (_downloadEnabled || _deleteEnabled) {
-//         html += "<br><form method='GET' action='/files'>";
-//         html += "<button type='submit'>Open File Manager</button>";
-//         html += "</form>";
-//     }
-
-//     html += "</body></html>";
-//     return html;
-// }
