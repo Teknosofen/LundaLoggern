@@ -15,14 +15,15 @@ extern WifiApServer WiFiserver; // only used to set text on home page
 class SDManager; // forward declaration
 
 struct Configs {
-    String channel;
-    String label;
-    String unit;
-    float scaleFactor;
-    float offset;
-    uint16_t unscaled;      // raw incoming value
-    float scaled;           // scaled/calibrated value
+    String channel = "000";
+    String label = "default";
+    String unit = "N/A";
+    float scaleFactor = 1.0;
+    float offset = 0.0;
+    uint16_t unscaled = 1;      // raw incoming value
+    float scaled = 1;           // scaled/calibrated value
     bool active = true;     // default to true unless specified otherwise
+    // String configType = "";
 };
 
 class ServoCIEData {
@@ -105,7 +106,7 @@ public:
     // bool loadSettingFromSPIFFS(const char* path);
     // bool syncSettingSDToSPIFFS(const char* path);
     // bool syncSettingSPIFFSToSD(const char* path);
-    void printAllSettings();
+    void printAllSettingConfigss();
 
     // void scaleAll(int metricSize, int settingSize);
     void scaleCIEData(const float* unscaledArray, float* scaledArray, int count, const Configs* configsArray);
@@ -182,6 +183,7 @@ private:
     int Error_info;
     char inByte;     // collects the latest char from the ventilator
 
+    // remove the following, use the Config Curves[n] instead
     uint16_t cieCurve1 = 0; // stores the flow signal received from CIE
     uint16_t cieCurve2 = 0; // stores the CO2 signal received from CIE
     uint16_t cieCurve3 = 0; // stores the airway pressure signal received from CIE

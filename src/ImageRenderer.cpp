@@ -5,7 +5,7 @@ ImageRenderer::ImageRenderer(TFT_eSPI &display) : tft(display) {}
 
 void ImageRenderer::begin() {
     tft.init();
-    tft.setRotation(3); // Set display orientation
+    tft.setRotation(1); // Set display orientation
     
     tft.fillScreen(TFT_LOGOBACKGROUND); // Clear the display
     tft.setTextColor(TFT_WHITE, TFT_LOGOBACKGROUND  ); // Set text color and background
@@ -38,7 +38,7 @@ void ImageRenderer::drawString(const String& text, int x, int y, int font) {
 }
 
 void ImageRenderer::drawString(const char* text, int x, int y, int font) {
-    drawString(String(text), x, y, font);  // Delegate to String version
+      drawString(String(text), x, y, font);  // Delegate to String version
 }
 
 void ImageRenderer::drawCenteredText(const String& text, int y) {

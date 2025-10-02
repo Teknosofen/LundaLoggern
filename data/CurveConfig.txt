@@ -1,4 +1,5 @@
-000 asakjhd kjkj    67  67  true
-001 asakjhd kjkj    67  67  true
-002 asakjhd kjkj    67  67  true
-003 asakjhd kjkj    67  67  true
+000	Flow	[ml/s]	0.25	4000	true
+001	Press	[cmH2O]	0.1	200	true
+002	Volume	[ml]	0.2	0.0	false 
+003	Edi	[uV]	0.01	0.0	false
+004	FCO2	[%]	0.1	0.0	false

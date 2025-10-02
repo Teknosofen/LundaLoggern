@@ -28,6 +28,7 @@ ImageRenderer renderer(tft);
 
 const char* MetricConfigPath = "/MetricConfig.txt";
 const char* SettingConfigPath = "/SettingConfig.txt";
+const char* CurveConfigPath = "/CurveConfig.txt";
 
 SPIClass hspi(HSPI);
 const SPISettings SENSOR_SPI_SETTINGS = SPISettings(25000000, MSBFIRST, SPI_MODE0); // 25 MHz
@@ -87,7 +88,7 @@ void setup() {
   }
   
   hostCom.println("Initializing CIE configs:");
-  servoCIEData.initializeConfigs(MetricConfigPath, SettingConfigPath);
+  servoCIEData.initializeConfigs(MetricConfigPath, SettingConfigPath, CurveConfigPath);
   hostCom.println("Initializing CIE com:");
   servoCIEData.begin();
 
@@ -101,11 +102,7 @@ void setup() {
 
   myWiFiServer.enableSdFileDownloads(true);
   myWiFiServer.enableSdFileDelete(true);
-
-  // WiFiserver.begin();
-  // hostCom.printf("Access Point IP: %s\n", WiFiserver.getApIpAddress());
-  renderer.drawString("WiFi disabled", 10, 50, 2); // Print another message on the display
-    
+  
   sd.listRoot();  // List all files in root
 
   interactionKey1.begin();
@@ -124,7 +121,8 @@ void loop() {
     renderer.pushFullImage(220, 40, 100, 100, lundaLogo);
     renderer.drawSDStatusIndicator(sd.isCardPresent());
     renderer.drawMainScreen();
-    renderer.drawString(myWiFiServer.getApIpAddress(), 10, 50, 2); // Print another message on the display
+    renderer.drawString("WiFi Off        ", 10, 50, 2); // Print another message on the display
+    // renderer.drawString(myWiFiServer.getApIpAddress(), 10, 50, 2); // Print another message on the display
     hostCom.println("LundaLogger now initialized");
   } // init loop
 
