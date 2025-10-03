@@ -195,19 +195,60 @@ void SDManager::listRoot() {
 }
 
 
+// bool SDManager::updateFileNameIfChanged(char dataType, String &outFileName) {
+//     // Generate filename based on timestamp and dataType
+//     time_t now = time(nullptr);
+//     struct tm *timeinfo = localtime(&now);
+
+//     char buffer[32];
+//     strftime(buffer, sizeof(buffer), "%Y%m%d_%H%M", timeinfo);
+//     String generatedName = String(buffer);
+
+//     if (dataType == 'M') {
+//         generatedName = "metrics_" + generatedName + ".csv";
+//     } else if (dataType == 'S') {
+//         generatedName = "settings_" + generatedName + ".csv";
+//     } else if (dataType == 'C') {
+//         generatedName = "curves_" + generatedName + ".csv";
+//     }
+
+//     generatedName = "/" + generatedName;
+//     outFileName = generatedName;
+
+//     return (generatedName != currentFileName);
+// }
+
 bool SDManager::updateFileNameIfChanged(char dataType, String &outFileName) {
-    // Generate filename based on timestamp and dataType
     time_t now = time(nullptr);
     struct tm *timeinfo = localtime(&now);
 
-    char buffer[32];
-    strftime(buffer, sizeof(buffer), "%Y%m%d_%H%M", timeinfo);
-    String generatedName = String(buffer);
+    // Determine 12h interval start: set hour to 00 or 12, minute to 00
+    int intervalHour = timeinfo->tm_hour < 12 ? 0 : 12;
+    // if 6h is needed:
+    
+    // Determine 6h interval start
+    // int intervalHour = (timeinfo->tm_hour / 6) * 6;
 
+    // Create a copy of timeinfo to modify
+    struct tm intervalTime = *timeinfo;
+    intervalTime.tm_hour = intervalHour;
+    intervalTime.tm_min = 0;
+    intervalTime.tm_sec = 0;
+
+    // Format timestamp as YYYYMMDD_HHMM
+    char buffer[32];
+    strftime(buffer, sizeof(buffer), "%Y%m%d_%H%M", &intervalTime);
+    String generatedName;
+
+    // Prefix based on dataType
     if (dataType == 'M') {
-        generatedName = "metrics_" + generatedName + ".csv";
+        generatedName = "metrics_" + String(buffer) + ".txt";
     } else if (dataType == 'S') {
-        generatedName = "settings_" + generatedName + ".csv";
+        generatedName = "settings_" + String(buffer) + ".txt";
+    } else if (dataType == 'C') {
+        generatedName = "curves_" + String(buffer) + ".txt";
+    } else if (dataType == 'A') {
+        generatedName = "alarms_" + String(buffer) + ".txt";
     }
 
     generatedName = "/" + generatedName;
@@ -240,7 +281,7 @@ void SDManager::appendData(String data, char dataType) {
     //     }
     // }
 
-    file.println(data);
+    file.print(data);
     file.close();
 }
 

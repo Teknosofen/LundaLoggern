@@ -60,7 +60,7 @@ void setup() {
 
   hspi.begin(HSPI_SCLK, HSPI_MISO, HSPI_MOSI, HSPI_CS); // SCK, MISO, MOSI, CS
   bool initSuccess = sd.begin(); // Attempt to initialize SD card and update internal status
-  sd.setCardPresent(initSuccess); // Explicit status tracking, done in method already
+  // sd.setCardPresent(initSuccess); // Explicit status tracking, done in method already
 
   // Debug 
   // sd.deleteAllFiles();  // Delete everything on the SD card

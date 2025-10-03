@@ -22,279 +22,201 @@ bool ServoCIEData::begin() {
     return true;
 }
 
+// ===============================
+// Dispatcher
+// ===============================
 void ServoCIEData::parseCIEData(char NextSCI_chr) {
-    // hostCom.print(NextSCI_chr, HEX);
-    // hostCom.printf(" %2.X",NextSCI_chr);
     switch (RunMode) {
-        case Awaiting_Info:
-            switch (NextSCI_chr) {
-                case 'S':
-                    RunMode = Settings_Data;
-                    hostCom.println("just got some Settings");
-                    settingsNo = 0;
-                    ByteCount = 2;
-                    break;
-                case 'B':
-                    RunMode = Breath_Data;
-                    hostCom.println("just got some Metrix");
-                    MetricNo = 0;
-                    ByteCount = 2;
-                    break;
-                case 'T':
-                    RunMode = Trend_Data;
-                    break;
-                case 'A':
-                    RunMode = Alarm_Data;
-                    break;
-                case 0xE0:
-                    RunMode = Error_Data;
-                    ByteCount = 1;
-                    break;
-                case 0x80:
-                    RunMode = Value_Data;
-                    hostCom.println("getting curves");
-                    ByteCount = 2;
-                    break;
-                case 0x81:
-                    RunMode = Phase_Data;
-                    hostCom.println("Phase data");
-                    ByteCount = 1;
-                    break;
-                case 0x7F:
-                    RunMode = Awaiting_Info;
-                hostCom.println("waiting for info");
-                    break;
-                default:
-                hostCom.println("waiting for runmode");
-                    break;
-            }
-            break;
-
-        case End_Flag_Found:
-            RunMode = Awaiting_Info;
-            break;
-
-        // new 2025-08-23
-        case Breath_Data:
-        hostCom.print(" B2B ");
-            if (ByteCount == 2) {
-                metrics[MetricNo].unscaled = 256 * NextSCI_chr;
-                --ByteCount;
-            } else if (ByteCount == 1) {
-                metrics[MetricNo].unscaled += NextSCI_chr;
-                --ByteCount;
-                metrics[MetricNo].scaled = metrics[MetricNo].unscaled * metrics[MetricNo].scaleFactor - metrics[MetricNo].offset;
-            } else if (ByteCount == 0 && NextSCI_chr == EndFlag) {
-                hostCom.print("DEBUG Metrix: ");
-                hostCom.println(metrics[MetricNo].unscaled);
-                String newFilename = "";
-                String dataStr = "";
-                bool isNewFile = sdManager->updateFileNameIfChanged('M', newFilename);
-                if (isNewFile) {
-                    hostCom.println("New metrics file created: " + newFilename);
-                    dataStr = "Data from: " + getServoID() + "\n";
-                    dataStr += "Timestamp\t" + getLabelsAsString(metrics, MetricNo) + "\n";
-                    sdManager->appendData(dataStr, 'M');
-                    hostCom.println(dataStr);
-                }
-
-                dataStr = dateTime.getRTC().toString() + "\t" + getScaledValuesAsString(metrics, MetricNo);
-                sdManager->appendData(dataStr, 'M');
-                hostCom.println(dataStr);
-
-                setLastMessageTime(millis());
-                RunMode = End_Flag_Found;
-            } else {
-                MetricNo++;
-                metrics[MetricNo].unscaled = 256 * NextSCI_chr;
-                ByteCount = 1;
-            }
-            break;
-
-        case Settings_Data:
-            if (ByteCount == 2) {
-                settings[settingsNo].unscaled = 256 * NextSCI_chr;
-                --ByteCount;
-            } else if (ByteCount == 1) {
-                settings[settingsNo].unscaled += NextSCI_chr;
-                --ByteCount;
-                settings[settingsNo].scaled = settings[settingsNo].unscaled * settings[settingsNo].scaleFactor - settings[settingsNo].offset;
-            } else if (ByteCount == 0 && NextSCI_chr == EndFlag) {
-
-                String newFilename = "";
-                String dataStr = "";
-                bool isNewFile = sdManager->updateFileNameIfChanged('S', newFilename);
-                if (isNewFile) {
-                    hostCom.println("New settings file created: " + newFilename);
-                    dataStr = "Data from: " + getServoID() + "\n";
-                    dataStr += "Timestamp\t" + getLabelsAsString(settings, settingsNo) + "\n";
-                    sdManager->appendData(dataStr, 'S');
-                    hostCom.println(dataStr);
-                }   
-                
-                dataStr = dateTime.getRTC().toString() + "\t" +getScaledValuesAsString(settings, settingsNo, true);
-
-                sdManager->appendData(dataStr, 'S');
-                hostCom.print(dataStr);
-                
-                // We have a valid com, reset the timer:
-                setLastMessageTime(millis());
-                
-                RunMode = End_Flag_Found;
-            } else {
-                settingsNo++;
-                settings[settingsNo].unscaled = 256 * NextSCI_chr;
-                ByteCount = 1;
-            }
-            break;
-
-            case Value_Data:
-                switch (CurveCounter) {
-                    case 0:
-                    
-                        if (ByteCount == 2) {
-                            cieCurve1 = 256 * NextSCI_chr;
-                            --ByteCount;
-                            hostCom.println("DEBUG - 1byte of curve 1");
-                        } else if (ByteCount == 1) {
-                            cieCurve1 += NextSCI_chr;
-                            hostCom.println("DEBUG - 2byte of curve 1");
-                            // hostCom.printf("DEBUG FLOW %d\t",cieFlow);
-                            // float cieFlowFloat = cieFlow * 0.25 - 4000.0;
-                            curves[CurveCounter].unscaled = cieCurve1;
-                            curves[CurveCounter].scaled = cieCurve1 * curves[0].scaleFactor - curves[0].offset;
-                            float cieFlowFloat = cieCurve1 * 0.25 - 4000.0;
-                            // hostCom.printf("DEBUG FLOW %.2f\n",cieFlowFloat);
-
-                            RunMode = Run_Mode;
-                            --ByteCount;
-                            if (NumberOfCurves > 1) CurveCounter = 1;
-                            else CurveCounter = 0;
-                            // hostCom.printf("cieFlow: %.2f\t", cieCurve1);
-                            // hostCom.println(cieFlow);
-                        }
-                        break;
-                    case 1:
-                        if (ByteCount == 2) {
-                            hostCom.println("DEBUG - 1byte of curve 2");
-                            cieCurve2 = 256 * NextSCI_chr;
-                            --ByteCount;
-                        } else if (ByteCount == 1) {
-                            hostCom.println("DEBUG - 2byte of curve 2");
-                            cieCurve2 += NextSCI_chr;
-                            float cieFCO2float = (cieCurve2 * 0.1);
-                            curves[CurveCounter].unscaled = cieCurve2;
-                            curves[CurveCounter].scaled = cieCurve2 * curves[1].scaleFactor - curves[1].offset;
-
-                            RunMode = Run_Mode;
-                            --ByteCount;
-                            if (NumberOfCurves > 2) CurveCounter = 2;
-                            else CurveCounter = 0;
-                            // hostCom.printf("cieCO2: %.2f\t", cieCurve2);
-                        }
-                        break;
-                    case 2:
-                        if (ByteCount == 2) {
-                            cieCurve3 = 256 * NextSCI_chr;
-                            --ByteCount;
-                            // Something missing here - or not?
-                        } else if (ByteCount == 1) {
-                            cieCurve3 += NextSCI_chr;
-                            float ciePawFloat = (cieCurve3 * 0.1);
-                            curves[CurveCounter].unscaled = cieCurve3;
-                            curves[CurveCounter].scaled = cieCurve3 * curves[2].scaleFactor - curves[2].offset;
-
-                            RunMode = Run_Mode;
-                            --ByteCount;
-                            if (NumberOfCurves > 3) CurveCounter = 3;
-                            else CurveCounter = 0;
-                            // hostCom.printf("ciePaw: %.2f\n", cieCurve3);
-                        }
-
-                        // We have a valid com, reset the timer:
-                        setLastMessageTime(millis());
-
-                    break;
-                    case 3:
-                        if(ByteCount == 2) {
-                            cieCurve4 = 256 * NextSCI_chr;
-                            --ByteCount;
-                        } else if (ByteCount == 1) {
-                            cieCurve4 += NextSCI_chr;  
-
-                            float cieEdiFloat = (cieCurve4 * 0.1);
-                            curves[CurveCounter].unscaled = cieCurve4;
-                            curves[CurveCounter].scaled = cieCurve4 * curves[3].scaleFactor - curves[3].offset;    
-                            RunMode = Run_Mode;
-                            --ByteCount;
-                            CurveCounter = 0;
-                            // hostCom.printf("cieEdi: %.2f\n", cieCurve4);
-                        }
-                    break;  
-
-                    default:
-                    hostCom.println("skit med curves");
-                    break;
-                }
-            break;
-        case Phase_Data:
-            breathPhase = NextSCI_chr;
-            // hostCom.printf("DEBUG Phase: %d\n", breathPhase);
-            --ByteCount;
-            RunMode = Run_Mode;
-            break;
-        case Trend_Data:
-            if (NextSCI_chr == EndFlag){
-                RunMode = End_Flag_Found;
-            }
-            break;
-        case Alarm_Data:
-            if (NextSCI_chr == EndFlag){
-                RunMode = End_Flag_Found;
-            }
-            break;
-        case Error_Data:
-            // look carefully at this, this is where the binary err code errflag_11 can be caught
-            if (NextSCI_chr == EndFlag) {
-                RunMode = End_Flag_Found;
-            } else {
-                Error_info = NextSCI_chr;
-                if (Error_info == StdbyErr) {
-                    hostCom.println(" CIE in stdby");
-                    setComOpen(false);      // in stdby, no data is sent, so we consider com lost
-                    // add also a dedicated method or parameter to signal dev in stdby?
-                } else if (Error_info = BuffFullErr) {
-                    hostCom.println(" CIE buffer full");
-                } else if (Error_info = ESCErr) {
-                    hostCom.println(" CIE transmission stopped by ESC");
-                } else {
-                    hostCom.print(" CIE error code: ");
-                    hostCom.println(Error_info);
-                }                // err code detection here
-            }
-            break;
-        case Run_Mode:
-            switch (NextSCI_chr) {
-                case ValueFlag:
-                    RunMode = Value_Data;
-                    ByteCount = 2;
-                    break;
-                case PhaseFlag:
-                    RunMode = Phase_Data;
-                    ByteCount = 1;
-                    break;
-                case EndFlag:
-                    RunMode = End_Flag_Found;
-                    break;
-                default:
-
-                    break;
-            }
-            break;
-        default:
-            break;
+        case Awaiting_Info:   handleAwaitingInfo(NextSCI_chr);   break;
+        case End_Flag_Found:  RunMode = Awaiting_Info;           break;
+        case Breath_Data:     handleBreathData(NextSCI_chr);     break;
+        case Settings_Data:   handleSettingsData(NextSCI_chr);   break;
+        case Value_Data:      handleValueData(NextSCI_chr);      break;
+        case Phase_Data:      handlePhaseData(NextSCI_chr);      break;
+        case Trend_Data:      handleTrendData(NextSCI_chr);      break;
+        case Alarm_Data:      handleAlarmData(NextSCI_chr);      break;
+        case Error_Data:      handleErrorData(NextSCI_chr);      break;
+        case Run_Mode:        handleRunMode(NextSCI_chr);        break;
+        default:              break;
     }
 }
+
+// ===============================
+// Handlers
+// ===============================
+void ServoCIEData::handleAwaitingInfo(uint8_t NextSCI_chr) {
+    switch (NextSCI_chr) {
+        case 'S':  RunMode = Settings_Data; settingsNo = 0; ByteCount = 2; break;
+        case 'B':  RunMode = Breath_Data;   MetricNo = 0;  ByteCount = 2; break;
+        case 'T':  RunMode = Trend_Data;                                break;
+        case 'A':  RunMode = Alarm_Data;                                break;
+        case 0xE0: RunMode = Error_Data;    ByteCount = 1;               break;
+        case 0x80: RunMode = Value_Data;    ByteCount = 2;               break;
+        case 0x81: RunMode = Phase_Data;    ByteCount = 1;               break;
+        case 0x7F: RunMode = Awaiting_Info;                             break;
+        default:   break;
+    }
+}
+
+void ServoCIEData::handleBreathData(uint8_t NextSCI_chr) {
+    if (ByteCount == 2) {
+        metrics[MetricNo].unscaled = 256 * NextSCI_chr;
+        --ByteCount;
+    } else if (ByteCount == 1) {
+        metrics[MetricNo].unscaled += NextSCI_chr;
+        --ByteCount;
+        metrics[MetricNo].scaled = metrics[MetricNo].unscaled * metrics[MetricNo].scaleFactor - metrics[MetricNo].offset;
+    } else if (ByteCount == 0 && NextSCI_chr == EndFlag) {
+        String newFilename, dataStr;
+        bool isNewFile = sdManager->updateFileNameIfChanged('M', newFilename);
+        if (isNewFile) {
+            dataStr = "Data from: " + getServoID() + "\n";
+            dataStr += "Timestamp\t" + getLabelsAsString(metrics, MetricNo) + "\n";
+            sdManager->appendData(dataStr, 'M');
+            hostCom.print(dataStr);
+        }
+        dataStr = dateTime.getRTC().toString() + "\t" + getScaledValuesAsString(metrics, MetricNo);
+        sdManager->appendData(dataStr, 'M');
+        setLastMessageTime(millis());
+        hostCom.print(dataStr);
+        RunMode = End_Flag_Found;
+    } else {
+        MetricNo++;
+        metrics[MetricNo].unscaled = 256 * NextSCI_chr;
+        ByteCount = 1;
+    }
+}
+
+void ServoCIEData::handleSettingsData(uint8_t NextSCI_chr) {
+    if (ByteCount == 2) {
+        settings[settingsNo].unscaled = 256 * NextSCI_chr;
+        --ByteCount;
+    } else if (ByteCount == 1) {
+        settings[settingsNo].unscaled += NextSCI_chr;
+        --ByteCount;
+        settings[settingsNo].scaled = settings[settingsNo].unscaled * settings[settingsNo].scaleFactor - settings[settingsNo].offset;
+    } else if (ByteCount == 0 && NextSCI_chr == EndFlag) {
+        String newFilename, dataStr;
+        bool isNewFile = sdManager->updateFileNameIfChanged('S', newFilename);
+        if (isNewFile) {
+            dataStr = "Data from: " + getServoID() + "\n";
+            dataStr += "Timestamp\t" + getLabelsAsString(settings, settingsNo) + "\n";
+            sdManager->appendData(dataStr, 'S');
+            hostCom.print(dataStr);
+        }
+        dataStr = dateTime.getRTC().toString() + "\t" + getScaledValuesAsString(settings, settingsNo, true);
+        sdManager->appendData(dataStr, 'S');
+        setLastMessageTime(millis());
+        hostCom.print(dataStr);
+        RunMode = End_Flag_Found;
+    } else {
+        settingsNo++;
+        settings[settingsNo].unscaled = 256 * NextSCI_chr;
+        ByteCount = 1;
+    }
+}
+
+void ServoCIEData::handleValueData(uint8_t NextSCI_chr) {
+    switch (CurveCounter) {
+        case 0:
+            if (ByteCount == 2) { cieCurve1 = 256 * NextSCI_chr; --ByteCount; }
+            else if (ByteCount == 1) {
+                cieCurve1 += NextSCI_chr;
+                curves[CurveCounter].unscaled = cieCurve1;
+                curves[CurveCounter].scaled = cieCurve1 * curves[0].scaleFactor - curves[0].offset;
+                RunMode = Run_Mode;
+                --ByteCount;
+                CurveCounter = (curveCount > 1) ? 1 : 0;
+            }
+            break;
+
+        case 1:
+            if (ByteCount == 2) { cieCurve2 = 256 * NextSCI_chr; --ByteCount; }
+            else if (ByteCount == 1) {
+                cieCurve2 += NextSCI_chr;
+                curves[CurveCounter].unscaled = cieCurve2;
+                curves[CurveCounter].scaled = cieCurve2 * curves[1].scaleFactor - curves[1].offset;
+                RunMode = Run_Mode;
+                --ByteCount;
+                CurveCounter = (curveCount > 2) ? 2 : 0;
+            }
+            break;
+
+        case 2:
+            if (ByteCount == 2) { cieCurve3 = 256 * NextSCI_chr; --ByteCount; }
+            else if (ByteCount == 1) {
+                cieCurve3 += NextSCI_chr;
+                curves[CurveCounter].unscaled = cieCurve3;
+                curves[CurveCounter].scaled = cieCurve3 * curves[2].scaleFactor - curves[2].offset;
+                RunMode = Run_Mode;
+                --ByteCount;
+                CurveCounter = (curveCount > 3) ? 3 : 0;
+            }
+            setLastMessageTime(millis());
+            break;
+
+        case 3:
+            if (ByteCount == 2) { cieCurve4 = 256 * NextSCI_chr; --ByteCount; }
+            else if (ByteCount == 1) {
+                cieCurve4 += NextSCI_chr;
+                curves[CurveCounter].unscaled = cieCurve4;
+                curves[CurveCounter].scaled = cieCurve4 * curves[3].scaleFactor - curves[3].offset;
+                RunMode = Run_Mode;
+                --ByteCount;
+                CurveCounter = 0;
+            }
+            break;
+
+        default: break;
+    }
+}
+
+void ServoCIEData::handlePhaseData(uint8_t NextSCI_chr) {
+    breathPhase = NextSCI_chr;
+    --ByteCount;
+    RunMode = Run_Mode;
+}
+
+void ServoCIEData::handleTrendData(uint8_t NextSCI_chr) {
+    if (NextSCI_chr == EndFlag) {
+        RunMode = End_Flag_Found;
+    }
+}
+
+void ServoCIEData::handleAlarmData(uint8_t NextSCI_chr) {
+    if (NextSCI_chr == EndFlag) {
+        RunMode = End_Flag_Found;
+    }
+}
+
+void ServoCIEData::handleErrorData(uint8_t NextSCI_chr) {
+    if (NextSCI_chr == EndFlag) {
+        RunMode = End_Flag_Found;
+    } else {
+        Error_info = NextSCI_chr;
+        if (Error_info == StdbyErr) {
+            hostCom.println(" CIE in stdby");
+            setComOpen(false);
+        } else if (Error_info == BuffFullErr) {
+            hostCom.println(" CIE buffer full");
+        } else if (Error_info == ESCErr) {
+            hostCom.println(" CIE transmission stopped by ESC");
+        } else {
+            hostCom.print(" CIE error code: ");
+            hostCom.println(Error_info);
+        }
+    }
+}
+
+void ServoCIEData::handleRunMode(uint8_t NextSCI_chr) {
+    switch (NextSCI_chr) {
+        case ValueFlag: RunMode = Value_Data; ByteCount = 2; break;
+        case PhaseFlag: RunMode = Phase_Data; ByteCount = 1; break;
+        case EndFlag:   RunMode = End_Flag_Found;            break;
+        default:        break;
+    }
+}
+
 
 // remoed use of String
 uint8_t ServoCIEData::CRC_calc(const char* localstring) {
@@ -635,38 +557,38 @@ void ServoCIEData::initializeConfigs(const char* metricPath, const char* setting
     // curves[0].configType = "Curves";
 
     if (SD.begin()) {
-        if (loadConfigFromSD(metricPath)) {
+        if (loadConfigFromSD(metricPath, metrics, metricCount, MaxMetrics)) {
             // hostCom.println("✔ MetricConfig loaded from SD");
             syncConfigSDToSPIFFS(metricPath);
             metricConfigLoaded = true;
         } else {
             hostCom.println("⚠ MetricConfig SD file missing, trying SPIFFS...");
-            if (loadConfigFromSPIFFS(metricPath)) {
+            if (loadConfigFromSPIFFS(metricPath, metrics, metricCount, MaxMetrics)) {
                 hostCom.println("✔ MetricConfig loaded from SPIFFS");
                 syncConfigSPIFFSToSD(metricPath);
                 metricConfigLoaded = true;
             }
         }
 
-        if (loadConfigFromSD(settingPath)) {
+        if (loadConfigFromSD(settingPath, settings, settingCount, MaxSettings)) {
             // hostCom.println("✔ SettingConfig loaded from SD");
             syncConfigSDToSPIFFS(settingPath);
             settingConfigLoaded = true;
         } else {
             hostCom.println("⚠ SettingConfig SD file missing, trying SPIFFS...");
-            if (loadConfigFromSPIFFS(settingPath)) {
+            if (loadConfigFromSPIFFS(settingPath, settings, settingCount, MaxSettings)) {
                 hostCom.println("✔ SettingConfig loaded from SPIFFS");
                 syncConfigSPIFFSToSD(settingPath);
                 settingConfigLoaded = true;
             }
         }
-        if (loadConfigFromSD(curvePath)) {
+        if (loadConfigFromSD(curvePath, curves, curveCount, MaxCurves)) {
             // hostCom.println("✔ CurveConfig loaded from SD");
             syncConfigSDToSPIFFS(curvePath);
             curveConfigLoaded = true;
         } else {
             hostCom.println("⚠ CurveConfig SD file missing, trying SPIFFS...");
-            if (loadConfigFromSPIFFS(curvePath)) {
+            if (loadConfigFromSPIFFS(curvePath, curves, curveCount, MaxCurves)) {
                 hostCom.println("✔ CurveConfig loaded from SPIFFS");
                 syncConfigSPIFFSToSD(curvePath);
                 curveConfigLoaded = true;
@@ -675,26 +597,26 @@ void ServoCIEData::initializeConfigs(const char* metricPath, const char* setting
     } else {
         hostCom.println("⚠ SD mount failed, using SPIFFS only...");
         if (begin()) {
-            metricConfigLoaded = loadConfigFromSPIFFS(metricPath);
-            settingConfigLoaded = loadConfigFromSPIFFS(settingPath);
-            curveConfigLoaded = loadConfigFromSPIFFS(curvePath);
+            metricConfigLoaded = loadConfigFromSPIFFS(metricPath, metrics, metricCount, MaxMetrics);
+            settingConfigLoaded = loadConfigFromSPIFFS(settingPath, settings, settingCount, MaxSettings);
+            curveConfigLoaded = loadConfigFromSPIFFS(curvePath, curves, curveCount, MaxCurves);
         }
     }
 
     if (metricConfigLoaded) {
-        printAllMetricsConfigs();
-    } else {
+        printAllConfigs(metrics, metricCount, metricPath);
+     } else {
         hostCom.println("❌ No metric configs loaded.");
     }
 
     if (settingConfigLoaded) {
-        printAllSettingConfigss();
+        printAllConfigs(settings, settingCount, settingPath);
     } else {
         hostCom.println("❌ No setting configs loaded.");
     }
     
     if (curveConfigLoaded) {
-        printAllCurveConfigs();
+        printAllConfigs(curves, curveCount, curvePath);
     } else {
         hostCom.println("❌ No curve configs loaded.");
     }
@@ -714,56 +636,52 @@ String ServoCIEData::concatConfigChannels(const Configs configs[], int size) {
     return result;
 }
 
-// Config handling
-bool ServoCIEData::loadConfigFromSD(const char* path) {
-    metricCount = 0;
+bool ServoCIEData::loadConfigFromSD(const char* path, Configs* configs, int& configCount, const int maxConfigs) {
+    configCount = 0;
     File file = SD.open(path);
     if (!file || file.isDirectory()) {
-        hostCom.println("❌ SD " + String(path) +" file not found");
-        metricConfigLoaded = false;
+        hostCom.println("❌ SD " + String(path) + " file not found");
         return false;
     }
 
-    hostCom.println("✅ Loaded " + String(path) +" config from SD");
+    hostCom.println("✅ Loaded " + String(path) + " config from SD");
     while (file.available()) {
         String line = file.readStringUntil('\n');
         line.trim();
         if (line.length() == 0 || line.startsWith("#")) continue;
 
         Configs m;
-        if (parseConfigLine(line, m) && metricCount < MaxMetrics) {
-            metrics[metricCount++] = m;
+        if (parseConfigLine(line, m) && configCount < MaxMetrics) {
+            configs[configCount++] = m;
         }
     }
 
     file.close();
-    metricConfigLoaded = true;
     return true;
 }
 
-bool ServoCIEData::loadConfigFromSPIFFS(const char* path) {
-    metricCount = 0;
+bool ServoCIEData::loadConfigFromSPIFFS(const char* path, Configs* configs, int& configCount, const int maxConfigs) {
+    configCount = 0;
     File file = SPIFFS.open(path);
     if (!file || file.isDirectory()) {
-        hostCom.println("❌ SPIFFS " + String(path) +" file not found");
-        metricConfigLoaded = false;
+        hostCom.println("? SPIFFS " + String(path) + " file not found");
+
         return false;
     }
 
-    hostCom.println("✅ Loaded " + String(path) +" config from SPIFFS");
+    hostCom.println("? Loaded " + String(path) + " config from SPIFFS");
     while (file.available()) {
         String line = file.readStringUntil('\n');
         line.trim();
         if (line.length() == 0 || line.startsWith("#")) continue;
 
         Configs m;
-        if (parseConfigLine(line, m) && metricCount < MaxMetrics) {
-            metrics[metricCount++] = m;
+        if (parseConfigLine(line, m) && configCount < MaxMetrics) {
+            configs[configCount++] = m;
         }
     }
 
     file.close();
-    metricConfigLoaded = true;
     return true;
 }
 
@@ -843,324 +761,20 @@ bool ServoCIEData::parseConfigLine(const String& line, Configs& m) {
 }
 
 
-void ServoCIEData::printAllCurveConfigs() {
-    hostCom.printf("\nCurves configuration:\n");
-    for (int i = 0; i < curveCount; i++) {
-        hostCom.printf("%s:\t%s [%s]\tScale: %.4f\tOffset: %.2f\n",
-                      curves[i].channel.c_str(),
-                      curves[i].label.c_str(),
-                      curves[i].unit.c_str(),
-                      curves[i].scaleFactor,
-                      curves[i].offset);
+void ServoCIEData::printAllConfigs(const Configs* configs, const int numConfigs, const char* ConfigPaths){
+ hostCom.printf("\n%s configuration:\n", ConfigPaths);
+    for (int i = 0; i < numConfigs; i++) {
+        hostCom.printf("%s:\t%s [%s]\tScale: %.4f\tOffset: %.2f %s\n",
+                      configs[i].channel.c_str(),
+                      configs[i].label.c_str(),
+                      configs[i].unit.c_str(),
+                      configs[i].scaleFactor,
+                      configs[i].offset,
+                      configs[i].active ? "true" : "false");
     }
-    hostCom.printf("Total num curves: %d\n\n", curveCount);
+    hostCom.printf("Total num curves: %d\n", numConfigs);
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// -------------------- Metric Config --------------------
-
-// bool ServoCIEData::loadMetricFromSD(const char* path) {
-//     metricCount = 0;
-//     File file = SD.open(path);
-//     if (!file || file.isDirectory()) {
-//         hostCom.println("❌ SD metric file not found");
-//         metricConfigLoaded = false;
-//         return false;
-//     }
-
-//     hostCom.println("✅ Loaded metric config from SD");
-//     while (file.available()) {
-//         String line = file.readStringUntil('\n');
-//         line.trim();
-//         if (line.length() == 0 || line.startsWith("#")) continue;
-
-//         Configs m;
-//         if (parseMetricLine(line, m) && metricCount < MaxMetrics) {
-//             metrics[metricCount++] = m;
-//         }
-//     }
-
-//     file.close();
-//     metricConfigLoaded = true;
-//     return true;
-// }
-
-// bool ServoCIEData::loadMetricFromSPIFFS(const char* path) {
-//     metricCount = 0;
-//     File file = SPIFFS.open(path);
-//     if (!file || file.isDirectory()) {
-//         hostCom.println("❌ SPIFFS metric file not found");
-//         metricConfigLoaded = false;
-//         return false;
-//     }
-
-//     hostCom.println("✅ Loaded metric config from SPIFFS");
-//     while (file.available()) {
-//         String line = file.readStringUntil('\n');
-//         line.trim();
-//         if (line.length() == 0 || line.startsWith("#")) continue;
-
-//         Configs m;
-//         if (parseMetricLine(line, m) && metricCount < MaxMetrics) {
-//             metrics[metricCount++] = m;
-//         }
-//     }
-
-//     file.close();
-//     metricConfigLoaded = true;
-//     return true;
-// }
-
-// bool ServoCIEData::syncMetricSDToSPIFFS(const char* path) {
-//     File inFile = SD.open(path);
-//     if (!inFile || inFile.isDirectory()) {
-//         hostCom.println("❌ SD metric file not found for syncing");
-//         return false;
-//     }
-
-//     File outFile = SPIFFS.open(path, FILE_WRITE);
-//     if (!outFile) {
-//         hostCom.println("❌ Failed to open SPIFFS metric file for writing");
-//         inFile.close();
-//         return false;
-//     }
-
-//     while (inFile.available()) {
-//         outFile.write(inFile.read());
-//     }
-
-//     inFile.close();
-//     outFile.close();
-//     hostCom.println("🔁 Synced SD → SPIFFS (metrics)");
-//     return true;
-// }
-
-// bool ServoCIEData::syncMetricSPIFFSToSD(const char* path) {
-//     File inFile = SPIFFS.open(path);
-//     if (!inFile || inFile.isDirectory()) {
-//         hostCom.println("❌ SPIFFS metric file not found for syncing");
-//         return false;
-//     }
-
-//     File outFile = SD.open(path, FILE_WRITE);
-//     if (!outFile) {
-//         hostCom.println("❌ Failed to open SD metric file for writing");
-//         inFile.close();
-//         return false;
-//     }
-
-//     while (inFile.available()) {
-//         outFile.write(inFile.read());
-//     }
-
-//     inFile.close();
-//     outFile.close();
-//     hostCom.println("🔁 Synced SPIFFS → SD (metrics)");
-//     return true;
-// }
-
-void ServoCIEData::printAllMetricsConfigs() {
-    hostCom.printf("\nMetrics configuration:\n");
-    for (int i = 0; i < metricCount; i++) {
-        hostCom.printf("%s:\t%s [%s]\tScale: %.4f\tOffset: %.2f\n",
-                      metrics[i].channel.c_str(),
-                      metrics[i].label.c_str(),
-                      metrics[i].unit.c_str(),
-                      metrics[i].scaleFactor,
-                      metrics[i].offset);
-    }
-    hostCom.printf("Total num metrics: %d\n\n", metricCount);
-}
-
-// bool ServoCIEData::parseMetricLine(const String& line, Configs& m) {
-//     int tab1 = line.indexOf('\t');
-//     int tab2 = line.indexOf('\t', tab1 + 1);
-//     int tab3 = line.indexOf('\t', tab2 + 1);
-//     int tab4 = line.indexOf('\t', tab3 + 1);
-
-//     if (tab1 == -1 || tab2 == -1 || tab3 == -1 || tab4 == -1) return false;
-
-//     m.channel     = line.substring(0, tab1);
-//     m.label       = line.substring(tab1 + 1, tab2);
-//     m.unit        = line.substring(tab2 + 1, tab3);
-//     m.scaleFactor = line.substring(tab3 + 1, tab4).toFloat();
-//     m.offset      = line.substring(tab4 + 1).toFloat();
-
-//     return true;
-// }
-
-// bool ServoCIEData::parseConfigLine(const String& line, Configs& m) {
-//     int tab1 = line.indexOf('\t');
-//     int tab2 = line.indexOf('\t', tab1 + 1);
-//     int tab3 = line.indexOf('\t', tab2 + 1);
-//     int tab4 = line.indexOf('\t', tab3 + 1);
-//     int tab5 = line.indexOf('\t', tab4 + 1); // optional sixth field
-
-//     if (tab1 == -1 || tab2 == -1 || tab3 == -1 || tab4 == -1) return false;
-
-//     m.channel     = line.substring(0, tab1);
-//     m.label       = line.substring(tab1 + 1, tab2);
-//     m.unit        = line.substring(tab2 + 1, tab3);
-//     m.scaleFactor = line.substring(tab3 + 1, tab4).toFloat();
-    
-//     if (tab5 != -1) {
-//         m.offset = line.substring(tab4 + 1, tab5).toFloat();
-//         String activeStr = line.substring(tab5 + 1);
-//         activeStr.trim();
-//         m.active = (activeStr == "true" || activeStr == "1");
-//     } else {
-//         m.offset = line.substring(tab4 + 1).toFloat();
-//         m.active = true; // default
-//     }
-
-//     return true;
-// }
-// -------------------- Setting Config --------------------
-
-// bool ServoCIEData::loadSettingFromSD(const char* path) {
-//     settingCount = 0;
-//     File file = SD.open(path);
-//     if (!file || file.isDirectory()) {
-//         hostCom.println("❌ SD setting file not found");
-//         settingConfigLoaded = false;
-//         return false;
-//     }
-
-//     hostCom.println("✅ Loaded settings from SD");
-//     while (file.available()) {
-//         String line = file.readStringUntil('\n');
-//         line.trim();
-//         if (line.length() == 0 || line.startsWith("#")) continue;
-
-//         Configs s;
-//         if (parseSettingLine(line, s) && settingCount < MaxSettings) {
-//             settings[settingCount++] = s;
-//         }
-//     }
-
-//     file.close();
-//     settingConfigLoaded = true;
-//     return true;
-// }
-
-// bool ServoCIEData::loadSettingFromSPIFFS(const char* path) {
-//     settingCount = 0;
-//     File file = SPIFFS.open(path);
-//     if (!file || file.isDirectory()) {
-//         hostCom.println("❌ SPIFFS setting file not found");
-//         settingConfigLoaded = false;
-//         return false;
-//     }
-
-//     hostCom.println("✅ Loaded settings from SPIFFS");
-//     while (file.available()) {
-//         String line = file.readStringUntil('\n');
-//         line.trim();
-//         if (line.length() == 0 || line.startsWith("#")) continue;
-
-//         Configs s;
-//         if (parseSettingLine(line, s) && settingCount < MaxSettings) {
-//             settings[settingCount++] = s;
-//         }
-//     }
-
-//     file.close();
-//     settingConfigLoaded = true;
-//     return true;
-// }
-
-// bool ServoCIEData::syncSettingSDToSPIFFS(const char* path) {
-//     File inFile = SD.open(path);
-//     if (!inFile || inFile.isDirectory()) {
-//         hostCom.println("❌ SD setting file not found for syncing");
-//         return false;
-//     }
-
-//     File outFile = SPIFFS.open(path, FILE_WRITE);
-//     if (!outFile) {
-//         hostCom.println("❌ Failed to open SPIFFS setting file for writing");
-//         inFile.close();
-//         return false;
-//     }
-
-//     while (inFile.available()) {
-//         outFile.write(inFile.read());
-//     }
-
-//     inFile.close();
-//     outFile.close();
-//     hostCom.println("🔁 Synced SD → SPIFFS (settings)");
-//     return true;
-// }
-
-// bool ServoCIEData::syncSettingSPIFFSToSD(const char* path) {
-//     File inFile = SPIFFS.open(path);
-//     if (!inFile || inFile.isDirectory()) {
-//         hostCom.println("❌ SPIFFS setting file not found for syncing");
-//         return false;
-//     }
-
-//     File outFile = SD.open(path, FILE_WRITE);
-//     if (!outFile) {
-//         hostCom.println("❌ Failed to open SD setting file for writing");
-//         inFile.close();
-//         return false;
-//     }
-
-//     while (inFile.available()) {
-//         outFile.write(inFile.read());
-//     }
-
-//     inFile.close();
-//     outFile.close();
-//     hostCom.println("🔁 Synced SPIFFS → SD (settings)");
-//     return true;
-// }
-
-void ServoCIEData::printAllSettingConfigss() {
-    hostCom.printf("\nSettings configuration:\n");
-    for (int i = 0; i < settingCount; i++) {
-        hostCom.printf("%s:\t%s [%s]\tScale: %.3f\tOffset: %.2f\n",
-                      settings[i].channel.c_str(),
-                      settings[i].label.c_str(),
-                      settings[i].unit.c_str(),
-                      settings[i].scaleFactor,
-                      settings[i].offset);
-    }
-    hostCom.printf("Total num settings: %d\n\n", settingCount);
-}
-
-// bool ServoCIEData::parseSettingLine(const String& line, Configs& s) {
-//     int tab1 = line.indexOf('\t');
-//     int tab2 = line.indexOf('\t', tab1 + 1);
-//     int tab3 = line.indexOf('\t', tab2 + 1);
-//     int tab4 = line.indexOf('\t', tab3 + 1);
-
-//     if (tab1 == -1 || tab2 == -1 || tab3 == -1 || tab4 == -1) return false;
-
-//     s.channel     = line.substring(0, tab1);
-//     s.label       = line.substring(tab1 + 1, tab2);
-//     s.unit        = line.substring(tab2 + 1, tab3);
-//     s.scaleFactor = line.substring(tab3 + 1, tab4).toFloat();
-//     s.offset      = line.substring(tab4 + 1).toFloat();
-
-//     return true;
-// }
 
 void ServoCIEData::scaleCIEData(const float* unscaledArray, float* scaledArray, int count, const Configs* configsArray) {
     for (int i = 0; i < count; ++i) {
