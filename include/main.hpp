@@ -10,6 +10,7 @@
 // -----------------------------------------------
 
 
+
 // Colours for LundaLogger
 #define TFT_LOGOBACKGROUND       0x85BA // note, if you pick another color from the image, note that you will have to flip the bytes here
 #define TFT_LOGOBLUE             0x5497
@@ -19,6 +20,7 @@
 #define TFT_MIDNIGHTBLUE         0x1028 // A light steel blue
 
 #define lundaLoggerVerLbl "LundaLogger 2025-03-20 1.0.0"
+#define VERSION "1.0.0"
 
 #define hostCom Serial
 #define servoCom Serial2

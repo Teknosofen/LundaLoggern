@@ -13,13 +13,59 @@ void ImageRenderer::begin() {
     tft.setTextSize(currentTextSize); // Set text size
     tft.setCursor(10, 10); // Set cursor position
     tft.println("LundaLogger Ready"); // Print a message on the display
-    delay(1000); // Delay to allow the display to show the message
+    delay(500); // Delay to allow the display to show the message
     // tft.setTextDatum(TL_DATUM);  // Top-left for manual positioning
-    pushFullImage(220, 40, 100, 100, lundaLogo);
+    initPositions();
+    // pushFullImage(220, 40, 100, 100, lundaLogo);
 }
     
 void ImageRenderer::clear() {
     tft.fillScreen(TFT_LOGOBACKGROUND);
+}
+
+void ImageRenderer::initPositions() {
+
+    logoPos.x = 0;
+    logoPos.y = 0;
+
+    labelPos.x = 105;
+    labelPos.y = 10;
+
+    versionPos.x = 240;
+    versionPos.y = 10; 
+  
+    servoIDPos.x = labelPos.x;
+    servoIDPos.y = 60;  
+  
+    timePos.x = labelPos.x;
+    timePos.y = 80;
+  
+    wiFiRectPos.x = 5;
+    wiFiRectPos.y = 100; 
+  
+    wiFiLabelPos.x = wiFiRectPos.x + 5;
+    wiFiLabelPos.y = wiFiRectPos.y - 10;
+  
+    wiFiAPIPPos.x = wiFiLabelPos.x;
+    wiFiAPIPPos.y = wiFiLabelPos.y + 20; 
+  
+    wiFiPromptPos.x = wiFiLabelPos.x;
+    wiFiPromptPos.y = wiFiLabelPos.y + 20 + 20; 
+
+    statusRectPos.x = 205;
+    statusRectPos.y = 100;
+
+    statusLabelPos.x = statusRectPos.x + 5 ;
+    statusLabelPos.y = statusRectPos.y - 10 ;  
+  
+    statusCOMPos.x = 0;               // will be overridden by function
+    statusCOMPos.y = 108; 
+  
+    statusSDPos.x = 0;                // will be overridden by function
+    statusSDPos.y = 138; 
+
+    phasePos.x = 160;
+    phasePos.y = 220;
 }
 
 void ImageRenderer::drawMainScreen() {
@@ -32,6 +78,64 @@ void ImageRenderer::drawMainScreen() {
     tft.setCursor(10, 50); // Set cursor position for next line
     tft.setTextSize(smallTextSize); // Set text size for the next line
 };
+
+void ImageRenderer::drawLabel() {
+    tft.setFreeFont(FSSB18);    
+    tft.setTextColor(TFT_DEEPBLUE, TFT_LOGOBACKGROUND); // Set text color and background
+    tft.setTextSize(smallTextSize); // Set text size
+    // tft.setCursor(labelPos.x, labelPos.y); // Set cursor position
+    tft.drawString("Logger", labelPos.x, labelPos.y); // Print a message on the display
+    // tft.setCursor(versionPos.x, versionPos.y); // Set cursor position for next line
+    tft.setFreeFont(FSS12); 
+    // tft.setTextSize(smallTextSize); // Set text size for the next line
+    tft.drawString(VERSION, versionPos.x, versionPos.y + 8); // Print version on the display
+}
+
+void ImageRenderer::drawStatusField() {
+    tft.setFreeFont(FSS9);   
+    tft.setTextColor(TFT_DEEPBLUE, TFT_LOGOBACKGROUND);
+    tft.setTextSize(1);
+    tft.drawRoundRect(wiFiRectPos.x, wiFiRectPos.y, 150, 70, 10, TFT_WHITE); // White border around the screen
+    tft.drawString("WiFi ", wiFiLabelPos.x, wiFiLabelPos.y); // Print a message on the display  
+}
+void ImageRenderer::drawWiFiField() {
+    tft.setFreeFont(FSS9);   
+    tft.setTextColor(TFT_DEEPBLUE, TFT_LOGOBACKGROUND);
+    tft.setTextSize(smallTextSize);
+    tft.drawRoundRect(statusRectPos.x, statusRectPos.y, 150, 70, 10, TFT_WHITE); // White border around the screendelay(10000);
+    tft.drawString("Status ", statusLabelPos.x, statusLabelPos.y); // Print a message on the display  
+}
+
+void ImageRenderer::drawWiFiAPIP(String WiFiAPIP) {
+    tft.setFreeFont(FSS9);  
+    tft.setTextColor(TFT_DEEPBLUE, TFT_LOGOBACKGROUND);
+    tft.setTextSize(1);
+    tft.drawString(WiFiAPIP, wiFiAPIPPos.x, wiFiAPIPPos.y, 2); // Print another message on the display
+}
+
+
+
+
+// void ImageRenderer::drawBreathPhase(uint8_t breathPhase) {
+//     // Draw a simple representation of the breath phase
+//     const int centerX = phasePos.x;
+//     const int centerY = phasePos.y;
+//     const int radius = 30;
+
+//     // Clear previous phase indicator
+//     tft.fillCircle(centerX, centerY, radius + 2, TFT_LOGOBACKGROUND);
+
+//     // Draw new phase indicator
+//     uint16_t color;
+//     switch (breathPhase) {
+//         case 0: color = TFT_BLUE; break;   // Inhale
+//         case 1: color = TFT_GREEN; break;  // Hold
+//         case 2: color = TFT_RED; break;    // Exhale
+//         default: color = TFT_LOGOBACKGROUND; break;  // Unknown
+//     }
+//     tft.fillCircle(centerX, centerY, radius, color);
+// } 
+
 
 void ImageRenderer::drawString(const String& text, int x, int y, int font) {
     tft.drawString(text, x, y, font);
@@ -46,18 +150,18 @@ void ImageRenderer::drawCenteredText(const String& text, int y) {
     tft.drawString(text, x, y);
 }
 
-void ImageRenderer::drawServoID(const String& servoID, int x, int y) {
+void ImageRenderer::drawServoID(const String& servoID) {
     tft.setFreeFont(FSS9);  
     
     tft.setTextColor(TFT_DEEPBLUE, TFT_LOGOBACKGROUND);
     tft.setTextSize(smallTextSize);
 
     // Draw new date/time in small font
-    tft.setCursor(x, y);
+    tft.setCursor(servoIDPos.x, servoIDPos.y);
     tft.print(servoID);
 }
 
-void ImageRenderer::drawDateTimeAt(const DateTime& dt, int x, int y, int spacing) {
+void ImageRenderer::drawDateTimeAt(const DateTime& dt, int spacing) {
     static String prevDateTimeStr = "";
     
     uint16_t textColor = TFT_DEEPBLUE;
@@ -71,7 +175,7 @@ void ImageRenderer::drawDateTimeAt(const DateTime& dt, int x, int y, int spacing
     tft.setTextSize(smallFont);
 
     if (!dt.isValid()) {
-      tft.setCursor(x, y);
+      tft.setCursor(timePos.x, timePos.y);
       tft.print("Invalid Time");
  
       prevDateTimeStr = "Invalid Time";
@@ -88,12 +192,12 @@ void ImageRenderer::drawDateTimeAt(const DateTime& dt, int x, int y, int spacing
 
     // Erase previous date/time
     tft.setTextColor(bgColor, bgColor);
-    tft.setCursor(x, y);
+    tft.setCursor(timePos.x, timePos.y);
     tft.print(prevDateTimeStr);
 
     // Draw new date/time in small font
     tft.setTextColor(textColor, bgColor);
-    tft.setCursor(x, y);
+    tft.setCursor(timePos.x, timePos.y);
     tft.print(dateStr + timeStr);
 
     // Save for next update
@@ -164,14 +268,14 @@ void ImageRenderer::drawSDStatusIndicator(bool isPresent) {
 
   int textWidth  = tft.textWidth("SD FAIL"); // adopt to the longest message
   int textHeight = tft.fontHeight();         // Font height
-  const int paddingX = 4;
-  const int paddingY = 4;
+  const int paddingX = 3;
+  const int paddingY = 3;
 
   int boxWidth  = textWidth + paddingX * 2;
   int boxHeight = textHeight + paddingY * 2;
 
   int x = TFT_HEIGHT - boxWidth - 10;        // Right-aligned
-  int y = 135;                                // Position under logo
+  int y = statusSDPos.y = 138;                                // Position under logo
   int cx = x + boxWidth / 2;
   int cy = y + boxHeight / 2;
 
@@ -203,14 +307,14 @@ void ImageRenderer::drawCOMStatusIndicator(bool isPresent) {
 
   int textWidth  = tft.textWidth("COM FAIL"); // adopt to the longest message
   int textHeight = tft.fontHeight();         // Font height
-  const int paddingX = 4;
-  const int paddingY = 4;
+  const int paddingX = 3;
+  const int paddingY = 3;
 
   int boxWidth  = textWidth + paddingX * 2;
   int boxHeight = textHeight + paddingY * 2;
 
-  int x = 10; //         // left-aligned
-  int y = 90;                                // Position under logo
+  int x = TFT_HEIGHT - boxWidth - 10; // 10; //  // left-aligned
+  int y = statusCOMPos.y; // 90;                // Position under logo
   int cx = x + boxWidth / 2;
   int cy = y + boxHeight / 2;
 
@@ -223,7 +327,7 @@ void ImageRenderer::drawCOMStatusIndicator(bool isPresent) {
   tft.setTextColor(prevFGColor, prevBGColor);
 }
 
-void ImageRenderer:: drawBreathPhase(uint8_t phase, int x, int y) {
+void ImageRenderer:: drawBreathPhase(uint8_t phase) {
   static String prevPhase = "";
   String phaseString = "";
   uint16_t textColor = TFT_DEEPBLUE;
@@ -237,33 +341,44 @@ void ImageRenderer:: drawBreathPhase(uint8_t phase, int x, int y) {
   #define pausePhase 0x20
   #define expPhase 0x30
 
+  //     // Draw a simple representation of the breath phase
+  const int centerX = phasePos.x;
+  const int centerY = phasePos.y;
+  const int radius = 30;
+
   tft.setTextColor(textColor, bgColor);
   tft.setTextSize(smallFont);
 
+  uint16_t color;
   switch (phase) {
     case inspPhase:
-      phaseString = "IN ";
+      // phaseString = "IN ";
+      color = TFT_BLUE;   // Inhale
     break;  
     case pausePhase:
-      phaseString = " - ";
+      // phaseString = " - ";
+      case 1: color = TFT_GREEN;  // Hold
     break;  
     case expPhase:
-      phaseString = "OUT";
+      // phaseString = "OUT";
+      color = TFT_RED;    // Exhale
     break;  
     default:
-      phaseString = "---";
+      // phaseString = "---";
+      color = TFT_LOGOBACKGROUND;  // Unknown
     break;
   }
+  tft.fillCircle(centerX, centerY, radius, color);
     // hostCom.println(phaseString);
 
     // Erase previous date/time
-    tft.setTextColor(bgColor, bgColor);
-    tft.setCursor(x, y);
-    tft.print(prevPhase);
+    // tft.setTextColor(bgColor, bgColor);
+    // tft.setCursor(phasePos.x, phasePos.y);
+    // tft.print(prevPhase);
 
-    // Draw new phase
-    tft.setTextColor(textColor, bgColor);
-    tft.setCursor(x, y);
-    tft.print(phaseString);
+    // // Draw new phase
+    // tft.setTextColor(textColor, bgColor);
+    // tft.setCursor(phasePos.x, phasePos.y);
+    // tft.print(phaseString);
     prevPhase = phaseString;
   }

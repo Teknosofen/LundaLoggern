@@ -116,14 +116,27 @@ void loop() {
   if (!initLoop) {
     initLoop = true; // Set the flag to true to indicate loop has been initialized
     hostCom.println("LundaLogger loop start init");
-    renderer.clear(); // Clear the display with blue color
-    renderer.setTextSize(1); // Set text size for the next line
-    renderer.pushFullImage(220, 40, 100, 100, lundaLogo);
-    renderer.drawSDStatusIndicator(sd.isCardPresent());
-    renderer.drawMainScreen();
-    renderer.drawString("WiFi Off        ", 10, 50, 2); // Print another message on the display
+
+    // renderer.pushFullImage(220, 40, 100, 100, lundaLogo);
+    // renderer.drawSDStatusIndicator(sd.isCardPresent());
+    // renderer.drawMainScreen();
+    // renderer.drawString("WiFi Off        ", 10, 50, 2); // Print another message on the display
     // renderer.drawString(myWiFiServer.getApIpAddress(), 10, 50, 2); // Print another message on the display
     hostCom.println("LundaLogger now initialized");
+
+// Layout testing
+    renderer.clear(); // Clear the display with blue color
+    renderer.pushFullImage(-3, -5, 100, 100, lundaLogo);
+    renderer.drawSDStatusIndicator(sd.isCardPresent());
+    renderer.drawLabel();
+    renderer.drawServoID("ServoID: XXXXX");
+    renderer.drawDateTimeAt(dateTime.getRTC()); // Draw current RTC time
+    renderer.drawStatusField();
+    renderer.drawWiFiField();
+    renderer.drawWiFiAPIP("WiFi disabled      ");
+    renderer.drawCOMStatusIndicator(servoCIEData.isComOpen());  
+    delay(5000);
+
   } // init loop
 
   static uint32_t loopStartTime = micros(); // Record the start time of the loop
@@ -133,8 +146,8 @@ void loop() {
 
     // renderer.drawMainScreen();
     // renderer.drawString(myWiFiserver.getApIpAddress(), 10, 50, 2); // Print another message on the display
-    renderer.drawDateTimeAt(dateTime.getRTC(), 10, 160); // Draw current RTC time
-    renderer.drawServoID(servoCIEData.getServoID(), 10, 140);
+    renderer.drawDateTimeAt(dateTime.getRTC()); // Draw current RTC time
+    renderer.drawServoID(servoCIEData.getServoID());
     renderer.drawCOMStatusIndicator(servoCIEData.isComOpen());
     
     // Update breath phase of display
@@ -142,7 +155,7 @@ void loop() {
     uint8_t currentBreathPhase = servoCIEData.getBreathPhase();
     if (lastBreathPhase != currentBreathPhase) {
       lastBreathPhase = currentBreathPhase;
-    renderer.drawBreathPhase(currentBreathPhase, 180, 140);
+    renderer.drawBreathPhase(currentBreathPhase);
     };
 
 
@@ -197,9 +210,8 @@ void loop() {
           myWiFiServer.begin();
           hostCom.println("Started WiFi");
           hostCom.printf("Access Point IP: %s\n", myWiFiServer.getApIpAddress());
-          renderer.drawString(myWiFiServer.getApIpAddress(), 10, 50, 2); // Print another message on the display
-
-          // Add dispaly update
+          renderer.drawWiFiAPIP(myWiFiServer.getApIpAddress() + "  ");
+          // renderer.drawString(myWiFiServer.getApIpAddress(), 10, 50, 2); // Print another message on the display
 
       } else {
         hostCom.println("interactionKey1 short press");
@@ -208,8 +220,8 @@ void loop() {
         WiFi.softAPdisconnect(true);  // true = erase settings
         WiFi.mode(WIFI_OFF);          // turn off WiFi radio
         hostCom.println("WiFi Access Point stopped");
-        renderer.drawString("WiFi disabled", 10, 50, 2); // Print another message on the display
-
+        // renderer.drawString("WiFi disabled", 10, 50, 2); // Print another message on the display
+        renderer.drawWiFiAPIP("WiFi disabled      ");
         // Add display update
 
       }
