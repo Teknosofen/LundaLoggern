@@ -20,6 +20,7 @@ public:
   void drawStatusField();
   void drawWiFiField();
   void drawWiFiAPIP(String drawWiFiAPIP);
+  void drawWiFiPromt(String WiFiPrompt);
 
   void begin();                     // Initialize display
   void clear();                     // Clear screen

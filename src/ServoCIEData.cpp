@@ -429,8 +429,8 @@ bool ServoCIEData::CIE_comCheck() {
     uint8_t receivedEOT  = servoCom.read();   // <EOT>
 
     hostCom.printf(" Received: STAR=0x%02X, CHK1=0x%02X, CHK2=0x%02X, EOT=0x%02X\n",
-                   receivedStar, receivedCHK1, receivedCHK2, receivedEOT);
-                       // CRC is calculated over the response start marker '*'
+                receivedStar, receivedCHK1, receivedCHK2, receivedEOT);
+                // CRC is calculated over the response start marker '*'
     
     uint8_t crc = '*';  // XOR of single byte = itself
 
@@ -491,6 +491,7 @@ bool ServoCIEData::CIE_setup() {
         setComOpen(true);
         setLastInitAttempt(millis());
         setLastMessageTime(millis());
+
     } else {
         hostCom.println("CIE communication FAILED");
         setComOpen(false);

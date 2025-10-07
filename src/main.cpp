@@ -26,9 +26,9 @@ ImageRenderer renderer(tft);
 
 // SDManager sd(hspi, HSPI_CS, &dateTime); // Pass your CS pin here
 
-const char* MetricConfigPath = "/MetricConfig.txt";
+const char* MetricConfigPath  = "/MetricConfig.txt";
 const char* SettingConfigPath = "/SettingConfig.txt";
-const char* CurveConfigPath = "/CurveConfig.txt";
+const char* CurveConfigPath   = "/CurveConfig.txt";
 
 SPIClass hspi(HSPI);
 const SPISettings SENSOR_SPI_SETTINGS = SPISettings(25000000, MSBFIRST, SPI_MODE0); // 25 MHz
@@ -45,7 +45,7 @@ Button interactionKey1(INTERACTION_BUTTON_PIN);  // GPIO14 Key 2
 
 void setup() {
   hostCom.begin(115200); // Initialize hostCom for debugging
-  delay(5000); // Wait for Serial to initialize
+  // delay(5000); // Wait for Serial to initialize
  
   // ensure that the servoCOM used the appripriate parity!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   hostCom.println("LundaLogger setup started");
@@ -116,48 +116,35 @@ void loop() {
   if (!initLoop) {
     initLoop = true; // Set the flag to true to indicate loop has been initialized
     hostCom.println("LundaLogger loop start init");
-
-    // renderer.pushFullImage(220, 40, 100, 100, lundaLogo);
-    // renderer.drawSDStatusIndicator(sd.isCardPresent());
-    // renderer.drawMainScreen();
-    // renderer.drawString("WiFi Off        ", 10, 50, 2); // Print another message on the display
-    // renderer.drawString(myWiFiServer.getApIpAddress(), 10, 50, 2); // Print another message on the display
-    hostCom.println("LundaLogger now initialized");
-
-// Layout testing
     renderer.clear(); // Clear the display with blue color
     renderer.pushFullImage(-3, -5, 100, 100, lundaLogo);
+    renderer.drawStatusField();
+    renderer.drawCOMStatusIndicator(servoCIEData.isComOpen());  
     renderer.drawSDStatusIndicator(sd.isCardPresent());
     renderer.drawLabel();
-    renderer.drawServoID("ServoID: XXXXX");
-    renderer.drawDateTimeAt(dateTime.getRTC()); // Draw current RTC time
-    renderer.drawStatusField();
     renderer.drawWiFiField();
     renderer.drawWiFiAPIP("WiFi disabled      ");
-    renderer.drawCOMStatusIndicator(servoCIEData.isComOpen());  
-    delay(5000);
+    renderer.drawWiFiPromt("Press key to enable ");
+    renderer.drawServoID("SERVO");
+    renderer.drawDateTimeAt(dateTime.getRTC()); // Draw current RTC time
+    
 
+    hostCom.println("LundaLogger now initialized");
   } // init loop
 
   static uint32_t loopStartTime = micros(); // Record the start time of the loop
-  if (micros() - loopStartTime > SET_LOOP_TIME) { // time loop
-    // Check if enough time has passed since the last loop iteration
+  if (micros() - loopStartTime > SET_LOOP_TIME) { // time loop, Check if enough time has passed since the last loop iteration
     loopStartTime = micros(); // Reset the start time for the next loop
 
-    // renderer.drawMainScreen();
-    // renderer.drawString(myWiFiserver.getApIpAddress(), 10, 50, 2); // Print another message on the display
     renderer.drawDateTimeAt(dateTime.getRTC()); // Draw current RTC time
-    renderer.drawServoID(servoCIEData.getServoID());
-    renderer.drawCOMStatusIndicator(servoCIEData.isComOpen());
     
     // Update breath phase of display
     static uint8_t lastBreathPhase = 0;
     uint8_t currentBreathPhase = servoCIEData.getBreathPhase();
     if (lastBreathPhase != currentBreathPhase) {
       lastBreathPhase = currentBreathPhase;
-    renderer.drawBreathPhase(currentBreathPhase);
+      renderer.drawBreathPhase(currentBreathPhase);
     };
-
 
     if (sd.updateCardStatus()) {
       hostCom.println("🔄 SD status changed!");
@@ -172,60 +159,56 @@ void loop() {
         hostCom.println("⚠️ Connection lost due to timeout.");
         servoCIEData.setComOpen(false);
         servoCIEData.setLastInitAttempt(now); // Reset init timer
+        renderer.drawServoID("SERVO:           ");
+        renderer.drawCOMStatusIndicator(servoCIEData.isComOpen());
     }
 
     // Retry INIT if communication is lost
     if (!servoCIEData.isComOpen() && (now - servoCIEData.getLastInitAttempt() > INIT_INTERVAL_MS)) {
       hostCom.println("🔄 (Re)Sending INIT...");
-        if (servoCIEData.CIE_comCheck()) {
-            hostCom.println("✅ CIE communication re-established.");
-            servoCIEData.setComOpen(true);
-            servoCIEData.setLastMessageTime(now); // Reset message timer
-            servoCIEData.CIE_setup();
-            myWiFiServer.setText(servoCIEData.getServoID());
-        } else {
-            hostCom.println("❌ CIE communication re-check failed.");
-        }
-        servoCIEData.setLastInitAttempt(now);
+      if (servoCIEData.CIE_comCheck()) {
+        hostCom.println("✅ CIE communication re-established.");
+        servoCIEData.setComOpen(true);
+        servoCIEData.setLastMessageTime(now); // Reset message timer
+        servoCIEData.CIE_setup();
+        myWiFiServer.setText(servoCIEData.getServoID());
+        renderer.drawServoID(servoCIEData.getServoID());
+        renderer.drawCOMStatusIndicator(servoCIEData.isComOpen());
+      } else {
+        hostCom.println("❌ CIE communication re-check failed.");
+      }
+      servoCIEData.setLastInitAttempt(now);
     }
   }
-  // check for serial data from CIE and ventilator
+  // check for and manage serial data from CIE and ventilator
   if (servoCom.available()) {
-    char inByte = servoCom.read();                               // get the byte from the ventilator 
+    char inByte = servoCom.read();              // get the byte from the ventilator 
     // hostCom.print(inByte, HEX);
     servoCIEData.parseCIEData(inByte);
   }
 
-  myWiFiServer.handleClient();  // This keeps the web server alive
+  myWiFiServer.handleClient();                  // This keeps the web server alive
   
   interactionKey1.update();
-
-  if (interactionKey1.wasPressed()) {
-    hostCom.println("interactionKey1 pressed");
-  }
+  // if (interactionKey1.wasPressed()) {
+  //   hostCom.println("interactionKey1 pressed");
+  // }
 
   if (interactionKey1.wasReleased()) {
-      if (interactionKey1.wasLongPress()) {
-          hostCom.println("Key1 long press (>1s)");
-          myWiFiServer.begin();
-          hostCom.println("Started WiFi");
-          hostCom.printf("Access Point IP: %s\n", myWiFiServer.getApIpAddress());
-          renderer.drawWiFiAPIP(myWiFiServer.getApIpAddress() + "  ");
-          // renderer.drawString(myWiFiServer.getApIpAddress(), 10, 50, 2); // Print another message on the display
-
-      } else {
-        hostCom.println("interactionKey1 short press");
-          
-        // Stop WiFi Access Point
-        WiFi.softAPdisconnect(true);  // true = erase settings
-        WiFi.mode(WIFI_OFF);          // turn off WiFi radio
-        hostCom.println("WiFi Access Point stopped");
-        // renderer.drawString("WiFi disabled", 10, 50, 2); // Print another message on the display
-        renderer.drawWiFiAPIP("WiFi disabled      ");
-        // Add display update
-
-      }
+    if (interactionKey1.wasLongPress()) {
+      hostCom.println("Key1 long press (>1s)");
+      myWiFiServer.begin();
+      hostCom.println("Started WiFi");
+      hostCom.printf("Access Point IP: %s\n", myWiFiServer.getApIpAddress());
+      renderer.drawWiFiAPIP(myWiFiServer.getApIpAddress() + "  ");
+      renderer.drawWiFiPromt("Press key to disable");
+    } else {                                    // Stop WiFi Access Point
+      hostCom.println("interactionKey1 short press");
+      WiFi.softAPdisconnect(true);              // true = erase settings
+      WiFi.mode(WIFI_OFF);                      // turn off WiFi radio
+      hostCom.println("WiFi Access Point stopped");
+      renderer.drawWiFiAPIP("WiFi disabled      ");
+      renderer.drawWiFiPromt("Press key to enable");
+    }
   }
-
-
 }

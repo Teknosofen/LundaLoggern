@@ -45,10 +45,10 @@ void ImageRenderer::initPositions() {
   
     wiFiLabelPos.x = wiFiRectPos.x + 5;
     wiFiLabelPos.y = wiFiRectPos.y - 10;
-  
+     
     wiFiAPIPPos.x = wiFiLabelPos.x;
     wiFiAPIPPos.y = wiFiLabelPos.y + 20; 
-  
+
     wiFiPromptPos.x = wiFiLabelPos.x;
     wiFiPromptPos.y = wiFiLabelPos.y + 20 + 20; 
 
@@ -64,8 +64,8 @@ void ImageRenderer::initPositions() {
     statusSDPos.x = 0;                // will be overridden by function
     statusSDPos.y = 138; 
 
-    phasePos.x = 160;
-    phasePos.y = 220;
+    phasePos.x = 180;
+    phasePos.y = 140;
 }
 
 void ImageRenderer::drawMainScreen() {
@@ -96,14 +96,14 @@ void ImageRenderer::drawStatusField() {
     tft.setTextColor(TFT_DEEPBLUE, TFT_LOGOBACKGROUND);
     tft.setTextSize(1);
     tft.drawRoundRect(wiFiRectPos.x, wiFiRectPos.y, 150, 70, 10, TFT_WHITE); // White border around the screen
-    tft.drawString("WiFi ", wiFiLabelPos.x, wiFiLabelPos.y); // Print a message on the display  
+    tft.drawString("WiFi  ", wiFiLabelPos.x, wiFiLabelPos.y); // Print a message on the display  
 }
 void ImageRenderer::drawWiFiField() {
     tft.setFreeFont(FSS9);   
     tft.setTextColor(TFT_DEEPBLUE, TFT_LOGOBACKGROUND);
     tft.setTextSize(smallTextSize);
     tft.drawRoundRect(statusRectPos.x, statusRectPos.y, 150, 70, 10, TFT_WHITE); // White border around the screendelay(10000);
-    tft.drawString("Status ", statusLabelPos.x, statusLabelPos.y); // Print a message on the display  
+    tft.drawString("Status  ", statusLabelPos.x, statusLabelPos.y); // Print a message on the display  
 }
 
 void ImageRenderer::drawWiFiAPIP(String WiFiAPIP) {
@@ -113,8 +113,12 @@ void ImageRenderer::drawWiFiAPIP(String WiFiAPIP) {
     tft.drawString(WiFiAPIP, wiFiAPIPPos.x, wiFiAPIPPos.y, 2); // Print another message on the display
 }
 
-
-
+void ImageRenderer::drawWiFiPromt(String WiFiPrompt) {
+    tft.setFreeFont(FSS9);  
+    tft.setTextColor(TFT_DEEPBLUE, TFT_LOGOBACKGROUND);
+    tft.setTextSize(1);
+    tft.drawString(WiFiPrompt,  wiFiPromptPos.x, wiFiPromptPos.y , 2); // Print another message on the display
+}
 
 // void ImageRenderer::drawBreathPhase(uint8_t breathPhase) {
 //     // Draw a simple representation of the breath phase
@@ -151,14 +155,19 @@ void ImageRenderer::drawCenteredText(const String& text, int y) {
 }
 
 void ImageRenderer::drawServoID(const String& servoID) {
-    tft.setFreeFont(FSS9);  
-    
-    tft.setTextColor(TFT_DEEPBLUE, TFT_LOGOBACKGROUND);
-    tft.setTextSize(smallTextSize);
+  String prevIDText = "";
+  tft.setFreeFont(FSS9);  
+  tft.setTextSize(smallTextSize);
 
-    // Draw new date/time in small font
-    tft.setCursor(servoIDPos.x, servoIDPos.y);
-    tft.print(servoID);
+  tft.setCursor(servoIDPos.x, servoIDPos.y);
+  tft.setTextColor(TFT_LOGOBACKGROUND, TFT_LOGOBACKGROUND);
+  tft.print(prevIDText);
+
+  // Draw new date/time in small font
+  tft.setCursor(servoIDPos.x, servoIDPos.y);
+  tft.setTextColor(TFT_DEEPBLUE, TFT_LOGOBACKGROUND);
+  tft.print(servoID);
+  prevIDText = servoID; // store the old text
 }
 
 void ImageRenderer::drawDateTimeAt(const DateTime& dt, int spacing) {
@@ -344,7 +353,7 @@ void ImageRenderer:: drawBreathPhase(uint8_t phase) {
   //     // Draw a simple representation of the breath phase
   const int centerX = phasePos.x;
   const int centerY = phasePos.y;
-  const int radius = 30;
+  const int radius = 15;
 
   tft.setTextColor(textColor, bgColor);
   tft.setTextSize(smallFont);
@@ -353,22 +362,22 @@ void ImageRenderer:: drawBreathPhase(uint8_t phase) {
   switch (phase) {
     case inspPhase:
       // phaseString = "IN ";
-      color = TFT_BLUE;   // Inhale
+      color = TFT_GREENISH_TINT ;   // Inhale
     break;  
     case pausePhase:
       // phaseString = " - ";
-      case 1: color = TFT_GREEN;  // Hold
+      case 1: color = TFT_SLATEBLUE ;  // Hold
     break;  
     case expPhase:
       // phaseString = "OUT";
-      color = TFT_RED;    // Exhale
+      color = TFT_REDDISH_TINT;    // Exhale
     break;  
     default:
       // phaseString = "---";
       color = TFT_LOGOBACKGROUND;  // Unknown
     break;
   }
-  tft.fillCircle(centerX, centerY, radius, color);
+  tft.fillCircle(phasePos.x, phasePos.y, radius, color);
     // hostCom.println(phaseString);
 
     // Erase previous date/time

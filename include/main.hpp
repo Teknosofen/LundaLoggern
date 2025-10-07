@@ -18,6 +18,8 @@
 #define TFT_DEEPBLUE             0x1A6F // A darker steel blue
 #define TFT_SLATEBLUE            0x2B4F // A lighter steel blue
 #define TFT_MIDNIGHTBLUE         0x1028 // A light steel blue
+#define TFT_REDDISH_TINT         0xA4B2   
+#define TFT_GREENISH_TINT        0x5DAD
 
 #define lundaLoggerVerLbl "LundaLogger 2025-03-20 1.0.0"
 #define VERSION "1.0.0"
