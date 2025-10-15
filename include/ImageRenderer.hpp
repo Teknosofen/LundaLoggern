@@ -19,7 +19,7 @@ public:
   void drawBreathPhase(uint8_t breathPhase);
   void drawStatusField();
   void drawWiFiField();
-  void drawWiFiAPIP(String drawWiFiAPIP);
+  void drawWiFiAPIP(String drawWiFiAPIP, String wiFiSSID);
   void drawWiFiPromt(String WiFiPrompt);
 
   void begin();                     // Initialize display
@@ -45,6 +45,7 @@ public:
   DisplayPos wiFiRectPos;
   DisplayPos wiFiLabelPos;
   DisplayPos wiFiAPIPPos;
+  DisplayPos wiFiSSIDPos;
   DisplayPos wiFiPromptPos;
   DisplayPos statusRectPos;
   DisplayPos statusLabelPos;

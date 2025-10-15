@@ -134,8 +134,8 @@ private:
     String parseASCIIResponse(const char* response, size_t len, bool* statusError = nullptr);
     
     // Parsed device info
-    String servoID = "";  // from RCTY
-    String servoSN = "";  // from RSN
+    String servoID = "SERVO";  // from RCTY
+    String servoSN = "---";  // from RSN
 
     enum RunModeType {
         Awaiting_Info,

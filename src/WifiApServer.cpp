@@ -28,6 +28,10 @@ void WifiApServer::begin() {
     // }
     setupWebServer();
     server.begin();
+    
+    // if (!loadLogoToPsram("/LogoWeb.png")) {
+    //     Serial.println("⚠️ Logo image not loaded.");
+    // }
 }
 
 void WifiApServer::handleClient() {
@@ -80,12 +84,34 @@ void WifiApServer::handleFileManager() {
     File root = SD.open("/");
     File file = root.openNextFile();
 
+    // String html = "<!DOCTYPE html><html><head><title>File Manager</title>";
+    // html += "<style>";
+    // html += "table { border-collapse: collapse; width: 100%; max-width: 600px; }";
+    // html += "th, td { padding: 8px; border: 1px solid #ccc; text-align: left; }";
+    // html += "th { background-color: #f0f0f0; }";
+    // html += "</style>";
+
     String html = "<!DOCTYPE html><html><head><title>File Manager</title>";
     html += "<style>";
-    html += "table { border-collapse: collapse; width: 100%; max-width: 600px; }";
-    html += "th, td { padding: 8px; border: 1px solid #ccc; text-align: left; }";
-    html += "th { background-color: #f0f0f0; }";
+    html += "body { background-color: #84B6D6; font-family: Arial, sans-serif; color: #000; margin: 20px; }";
+    html += "h2 { text-align: center; }";
+    html += "table { border-collapse: collapse; width: 100%; max-width: 700px; margin: 0 auto; background-color: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 6px rgba(0,0,0,0.15); }";
+    html += "th, td { padding: 10px; border-bottom: 1px solid #ccc; text-align: left; }";
+    html += "th { background-color: #e0f8e0; color: #207520; font-weight: bold; }";
+    html += "tr:nth-child(even) { background-color: #f9f9f9; }";
+
+
+    html += "button { background-color: #0078D7; color: white; border: none; padding: 10px 20px; border-radius: 10px; cursor: pointer; font-size: 15px; box-shadow: 2px 2px 6px rgba(0,0,0,0.3); }";
+    html += "button:hover { background-color: #005FA3; }";
+    html += "form { text-align: center; margin-top: 15px; }";
+    html += "a { color: #000; text-decoration: none; }";
     html += "</style>";
+
+    // html += "button { background-color: #207520; color: white; border: none; padding: 10px 16px; border-radius: 5px; cursor: pointer; font-size: 14px; }";
+    // html += "button:hover { background-color: #1a5f1a; }";
+    // html += "a.button { display: inline-block; margin-top: 20px; padding: 10px 15px; background-color: #207520; color: white; text-decoration: none; border-radius: 5px; font-weight: bold; }";
+    // html += "a.button:hover { background-color: #1a5f1a; }";
+    // html += "</style>";
 
     // --- JavaScript ---
     html += "<script>";
@@ -134,18 +160,33 @@ void WifiApServer::handleFileManager() {
 
     html += "</table><br>";
 
-    // Download form (GET)
+    // // Download form (GET)
+    // html += "<form id='downloadForm' method='GET' action='/download' onsubmit='copySelection(\"downloadForm\")'>";
+    // html += "<button type='submit'>Download Selected</button>";
+    // html += "</form> ";
+
+    // // Delete form (POST, with confirmation)
+    // html += "<form id='deleteForm' method='POST' action='/delete' ";
+    // html += "onsubmit='copySelection(\"deleteForm\"); confirmDelete(event)'>";
+    // html += "<button type='submit'>Delete Selected</button>";
+    // html += "</form>";
+
+    // html += "<br><br><a href='/'>Back to Main Page</a>";
+
+    // --- Buttons (same style as on main page) ---
     html += "<form id='downloadForm' method='GET' action='/download' onsubmit='copySelection(\"downloadForm\")'>";
     html += "<button type='submit'>Download Selected</button>";
-    html += "</form> ";
+    html += "</form>";
 
-    // Delete form (POST, with confirmation)
-    html += "<form id='deleteForm' method='POST' action='/delete' ";
-    html += "onsubmit='copySelection(\"deleteForm\"); confirmDelete(event)'>";
+    html += "<form id='deleteForm' method='POST' action='/delete' onsubmit='copySelection(\"deleteForm\"); confirmDelete(event)'>";
     html += "<button type='submit'>Delete Selected</button>";
     html += "</form>";
 
-    html += "<br><br><a href='/'>Back to Main Page</a>";
+    html += "<form method='GET' action='/'>";
+    html += "<button type='submit'>Back to Main Page</button>";
+    html += "</form>";
+
+
     html += "</body></html>";
 
     server.send(200, "text/html", html);
@@ -197,6 +238,8 @@ std::vector<String> WifiApServer::listSdFiles() {
     return list;
 }
 
+// void WiFiAPServer::initLogo() [];
+
 void WifiApServer::handleLogo() {
     File file = SPIFFS.open("/LogoWeb.png", "r");
     if (!file) {
@@ -209,10 +252,28 @@ void WifiApServer::handleLogo() {
 
 void WifiApServer::handleConfigViewer() {
     String html = "<!DOCTYPE html><html><head><title>Configuration Files</title>";
-    html += "<style>pre { background-color: #f4f4f4; padding: 10px; border: 1px solid #ccc; }</style>";
-    html += "</head><body>";
+    
+    // 🌈 Apply unified color theme and soft styling
+    html += "<style>";
+    html += "body { background-color: #84B6D6; font-family: Arial, sans-serif; color: #000; margin: 20px; }";
+    html += "h2, h3 { text-align: center; }";
+
+
+    html += "pre { background-color: #fff; padding: 10px; border: 1px solid #ccc; border-radius: 6px; max-width: 800px; margin: 10px auto; white-space: pre-wrap; box-shadow: 2px 2px 6px rgba(0,0,0,0.2); }";
+    html += "button { background-color: #0078D7; color: white; border: none; padding: 10px 20px; border-radius: 10px; cursor: pointer; font-size: 15px; box-shadow: 2px 2px 6px rgba(0,0,0,0.3); }";
+    html += "button:hover { background-color: #005FA3; }";
+    html += "form { text-align: center; margin-top: 20px; }";
+    html += "</style></head><body>";
+
+
+    // html += "pre { background-color: #e0f8e0; padding: 10px; border: 1px solid #207520; border-radius: 6px; white-space: pre-wrap; word-wrap: break-word; }";
+    // html += "a.button { display: inline-block; margin-top: 20px; padding: 10px 15px; background-color: #207520; color: white; text-decoration: none; border-radius: 5px; font-weight: bold; }";
+    // html += "a.button:hover { background-color: #1a5f1a; }";
+    // html += "</style></head><body>";
+    
     html += "<h2>Configuration Files</h2>";
 
+    // --- Inline helper to read file content ---
     auto readFileContent = [](const char* path) -> String {
         File file = SPIFFS.open(path, "r");
         if (!file) {
@@ -226,19 +287,73 @@ void WifiApServer::handleConfigViewer() {
         return content;
     };
 
-    // MetricConfig.txt
+    // --- MetricConfig.txt ---
     html += "<h3>MetricConfig.txt</h3>";
     html += "<pre>" + readFileContent("/MetricConfig.txt") + "</pre>";
 
-    // SettingConfig.txt
+    // --- SettingConfig.txt ---
     html += "<h3>SettingConfig.txt</h3>";
     html += "<pre>" + readFileContent("/SettingConfig.txt") + "</pre>";
 
-    html += "<br><a href='/'>Back to Main Page</a>";
+    // // --- Back button ---
+    // html += "<div style='text-align: center;'>";
+    // html += "<a class='button' href='/'>Back to Main Page</a>";
+    // html += "</div>";
+
+    // --- Back Button ---
+    html += "<form method='GET' action='/'>";
+    html += "<button type='submit'>Back to Main Page</button>";
+    html += "</form>";
+
     html += "</body></html>";
 
     server.send(200, "text/html", html);
 }
+
+// void WifiApServer::handleConfigViewer() {
+//     String html = "<!DOCTYPE html><html><head><title>Configuration Files</title>";
+
+//     // html += "<style>pre { background-color: #f4f4f4; padding: 10px; border: 1px solid #ccc; }</style>";
+//     // html += "</head><body>";
+    
+//     // 🌈 Apply unified color theme and soft styling
+//     html += "<style>";
+//     html += "body { background-color: #84B6D6; font-family: Arial, sans-serif; color: #000; margin: 20px; }";
+//     html += "h2, h3 { text-align: center; }";
+//     html += "pre { background-color: #e0f8e0; padding: 10px; border: 1px solid #207520; border-radius: 6px; white-space: pre-wrap; word-wrap: break-word; }";
+//     html += "a.button { display: inline-block; margin-top: 20px; padding: 10px 15px; background-color: #207520; color: white; text-decoration: none; border-radius: 5px; font-weight: bold; }";
+//     html += "a.button:hover { background-color: #1a5f1a; }";
+//     html += "</style></head><body>";
+
+    
+//     html += "<h2>Configuration Files</h2>";
+
+//     auto readFileContent = [](const char* path) -> String {
+//         File file = SPIFFS.open(path, "r");
+//         if (!file) {
+//             return String("[Error: Could not open ") + path + "]";
+//         }
+//         String content;
+//         while (file.available()) {
+//             content += (char)file.read();
+//         }
+//         file.close();
+//         return content;
+//     };
+
+//     // MetricConfig.txt
+//     html += "<h3>MetricConfig.txt</h3>";
+//     html += "<pre>" + readFileContent("/MetricConfig.txt") + "</pre>";
+
+//     // SettingConfig.txt
+//     html += "<h3>SettingConfig.txt</h3>";
+//     html += "<pre>" + readFileContent("/SettingConfig.txt") + "</pre>";
+
+//     html += "<br><a href='/'>Back to Main Page</a>";
+//     html += "</body></html>";
+
+//     server.send(200, "text/html", html);
+// }
 
 
 extern SDManager sd; // Add this at top of file
@@ -246,6 +361,9 @@ extern SDManager sd; // Add this at top of file
 
 String WifiApServer::generateHtmlPage() {
     String html = "<!DOCTYPE html><html><head><title>LundaLogger Status</title></head><body>";
+
+    // 🌈 Set background color to your TFT color (#84B6D6)
+    html += "<body style='background-color: #84B6D6; font-family: Arial, sans-serif;'>";
 
     // --- SD Card Status ---
     sd.updateCardStatus();
@@ -293,7 +411,8 @@ String WifiApServer::generateHtmlPage() {
     // --- Values List ---
     html += "<ul>";
     for (int i = 0; i < 4; ++i) {
-        html += "<li>" + _labels[i] + ": " + String(_values[i]) + "</li>";
+        // html += "<li>" + _labels[i] + ": " + String(_values[i]) + "</li>"; // label and value
+        html += "<li>" + _labels[i]; // label onlu
     }
     html += "</ul>";
 
@@ -313,5 +432,50 @@ String WifiApServer::generateHtmlPage() {
     return html;
 }
 
+void WifiApServer::freePsramImage() {
+    if (imageBuffer) {
+        free(imageBuffer);
+        imageBuffer = nullptr;
+        imageSize = 0;
+        Serial.println("✅ PSRAM image buffer freed.");
+    } else {
+        Serial.println("ℹ️ No PSRAM image buffer to free.");
+    }
+}
 
+bool WifiApServer::loadLogoToPsram(const char* path) {
+    File file = SPIFFS.open(path, "r");
+    if (!file) {
+        Serial.println("❌ Failed to open image file: " + String(path));
+        return false;
+    }
 
+    imageSize = file.size();
+    imageBuffer = (uint8_t*)ps_malloc(imageSize);
+    if (!imageBuffer) {
+        Serial.println("❌ PSRAM allocation failed for image");
+        file.close();
+        return false;
+    }
+
+    size_t bytesRead = file.read(imageBuffer, imageSize);
+    file.close();
+
+    if (bytesRead != imageSize) {
+        Serial.println("❌ Incomplete read from SPIFFS");
+        free(imageBuffer);
+        imageBuffer = nullptr;
+        return false;
+    }
+
+    if (psramFound()) {
+        hostCom.println("✅ PSRAM is available.");
+        hostCom.println("Total PSRAM: " + String(ESP.getPsramSize()) + " bytes");
+        hostCom.println("Free PSRAM: " + String(ESP.getFreePsram()) + " bytes");
+    } else {
+        hostCom.println("⚠️ PSRAM not found.");
+    }
+
+    Serial.println("✅ Image loaded into PSRAM successfully.");
+    return true;
+}

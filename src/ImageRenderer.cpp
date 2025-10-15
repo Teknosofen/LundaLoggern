@@ -13,7 +13,9 @@ void ImageRenderer::begin() {
     tft.setTextSize(currentTextSize); // Set text size
     tft.setCursor(10, 10); // Set cursor position
     tft.println("LundaLogger Ready"); // Print a message on the display
-    delay(500); // Delay to allow the display to show the message
+    tft.setCursor(10, 30); // Set cursor position
+    tft.println(lundaLoggerVerLbl);
+    // delay(500); // Delay to allow the display to show the message
     // tft.setTextDatum(TL_DATUM);  // Top-left for manual positioning
     initPositions();
     // pushFullImage(220, 40, 100, 100, lundaLogo);
@@ -28,11 +30,11 @@ void ImageRenderer::initPositions() {
     logoPos.x = 0;
     logoPos.y = 0;
 
-    labelPos.x = 105;
+    labelPos.x = 90;
     labelPos.y = 10;
 
-    versionPos.x = 240;
-    versionPos.y = 10; 
+    versionPos.x = 290;
+    versionPos.y = 45; 
   
     servoIDPos.x = labelPos.x;
     servoIDPos.y = 60;  
@@ -49,8 +51,11 @@ void ImageRenderer::initPositions() {
     wiFiAPIPPos.x = wiFiLabelPos.x;
     wiFiAPIPPos.y = wiFiLabelPos.y + 20; 
 
+    wiFiSSIDPos.x = wiFiLabelPos.x;
+    wiFiSSIDPos.y = wiFiLabelPos.y + 20 + 20;
+
     wiFiPromptPos.x = wiFiLabelPos.x;
-    wiFiPromptPos.y = wiFiLabelPos.y + 20 + 20; 
+    wiFiPromptPos.y = wiFiLabelPos.y + 20 + 20 + 20; 
 
     statusRectPos.x = 205;
     statusRectPos.y = 100;
@@ -84,11 +89,11 @@ void ImageRenderer::drawLabel() {
     tft.setTextColor(TFT_DEEPBLUE, TFT_LOGOBACKGROUND); // Set text color and background
     tft.setTextSize(smallTextSize); // Set text size
     // tft.setCursor(labelPos.x, labelPos.y); // Set cursor position
-    tft.drawString("Logger", labelPos.x, labelPos.y); // Print a message on the display
+    tft.drawString("LundaLogger", labelPos.x, labelPos.y); // Print a message on the display
     // tft.setCursor(versionPos.x, versionPos.y); // Set cursor position for next line
-    tft.setFreeFont(FSS12); 
+    tft.setFreeFont(FSS9); 
     // tft.setTextSize(smallTextSize); // Set text size for the next line
-    tft.drawString(VERSION, versionPos.x, versionPos.y + 8); // Print version on the display
+    tft.drawString(VERSION, versionPos.x, versionPos.y, 2); // Print version on the display
 }
 
 void ImageRenderer::drawStatusField() {
@@ -106,18 +111,20 @@ void ImageRenderer::drawWiFiField() {
     tft.drawString("Status  ", statusLabelPos.x, statusLabelPos.y); // Print a message on the display  
 }
 
-void ImageRenderer::drawWiFiAPIP(String WiFiAPIP) {
+void ImageRenderer::drawWiFiAPIP(String WiFiAPIP, String wiFiSSID) {
     tft.setFreeFont(FSS9);  
     tft.setTextColor(TFT_DEEPBLUE, TFT_LOGOBACKGROUND);
     tft.setTextSize(1);
     tft.drawString(WiFiAPIP, wiFiAPIPPos.x, wiFiAPIPPos.y, 2); // Print another message on the display
+    tft.setTextSize(1);
+    tft.drawString("SSID: " + wiFiSSID, wiFiSSIDPos.x, wiFiSSIDPos.y, 2); // Print another message on the display
 }
 
 void ImageRenderer::drawWiFiPromt(String WiFiPrompt) {
     tft.setFreeFont(FSS9);  
     tft.setTextColor(TFT_DEEPBLUE, TFT_LOGOBACKGROUND);
     tft.setTextSize(1);
-    tft.drawString(WiFiPrompt,  wiFiPromptPos.x, wiFiPromptPos.y , 2); // Print another message on the display
+    tft.drawString(WiFiPrompt,  wiFiPromptPos.x, wiFiPromptPos.y , 2); // Print another message on the display, small font
 }
 
 // void ImageRenderer::drawBreathPhase(uint8_t breathPhase) {

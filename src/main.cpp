@@ -37,11 +37,17 @@ SDManager sd(hspi, HSPI_CS, &dateTime); // Pass your CS pin here
 
 ServoCIEData servoCIEData(&sd);
 
-WifiApServer myWiFiServer("LundaLoggern", ""); //"neonatal");
+WifiApServer myWiFiServer(LOGGER_SSID, ""); //"neonatal");
 
 DateTime dateTime; // Global DateTime object
 
 Button interactionKey1(INTERACTION_BUTTON_PIN);  // GPIO14 Key 2
+
+// image handling 
+// uint8_t* imageBuffer = nullptr;
+// size_t imageSize = 0;
+
+
 
 void setup() {
   hostCom.begin(115200); // Initialize hostCom for debugging
@@ -56,7 +62,7 @@ void setup() {
   // pinMode(TXD2, OUTPUT);
   servoCom.begin(SERVO_BAUD, SERIAL_8E1, RXD2, TXD2); // RX = GPIO16, TX = GPIO17
 
-  delay(100); // Wait for Serial to initialize
+  delay(1000); // Wait for Serial to initialize
 
   hspi.begin(HSPI_SCLK, HSPI_MISO, HSPI_MOSI, HSPI_CS); // SCK, MISO, MOSI, CS
   bool initSuccess = sd.begin(); // Attempt to initialize SD card and update internal status
@@ -91,21 +97,52 @@ void setup() {
   servoCIEData.initializeConfigs(MetricConfigPath, SettingConfigPath, CurveConfigPath);
   hostCom.println("Initializing CIE com:");
   servoCIEData.begin();
+  // myWiFiServer.setText(servoCIEData.getServoID());
+  // renderer.drawServoID(servoCIEData.getServoID());
 
   // myWiFiserver.setLogoData(lundaLogo, 100, 100);
   myWiFiServer.setText("LundaLogger");
   // myWiFiServer.setTextAndValues("LundaLogger", 23.5, 67.8, 1013.2, 3.7);
-  // myWiFiServer.setLabel(0, "Temp");
-  // myWiFiServer.setLabel(1, "Humidity");
-  // myWiFiServer.setLabel(2, "Pressure");
-  // myWiFiServer.setLabel(3, "Battery");
+  myWiFiServer.setLabel(0, lundaLoggerVerLbl);
+  myWiFiServer.setLabel(1, " ");
+  const String SSIDStr = LOGGER_SSID;
+  myWiFiServer.setLabel(2, "SSID: " + SSIDStr);
+  myWiFiServer.setLabel(3, servoCIEData.getServoID());
 
   myWiFiServer.enableSdFileDownloads(true);
   myWiFiServer.enableSdFileDelete(true);
   
-  sd.listRoot();  // List all files in root
+  // skipped file listing 
+  // sd.listRoot();  // List all files in root
 
   interactionKey1.begin();
+
+  // image transfer fr SPIFFS to PSRAM
+  // File file = SPIFFS.open("/LogoWeb.png", "r");
+  // if (!file) {
+  //   Serial.println("Failed to open image");
+  //   return;
+  // }
+
+  // imageSize = file.size();
+  // imageBuffer = (uint8_t*)ps_malloc(imageSize);
+  // if (!imageBuffer) {
+  //   Serial.println("PSRAM allocation failed");
+  //   return;
+  // }
+
+  // file.read(imageBuffer, imageSize);
+  // file.close();
+
+
+  if (psramFound()) {
+    hostCom.println("PSRAM is available.");
+    hostCom.println("Total PSRAM: " + String(ESP.getPsramSize()) + " bytes");
+    hostCom.println("Free PSRAM: " + String(ESP.getFreePsram()) + " bytes");
+  } else {
+    hostCom.println("PSRAM not found.");
+  }
+
 }
 
 void loop() {
@@ -123,11 +160,10 @@ void loop() {
     renderer.drawSDStatusIndicator(sd.isCardPresent());
     renderer.drawLabel();
     renderer.drawWiFiField();
-    renderer.drawWiFiAPIP("WiFi disabled      ");
+    renderer.drawWiFiAPIP("WiFi OFF      ", "No SSID        ");
     renderer.drawWiFiPromt("Press key to enable ");
-    renderer.drawServoID("SERVO");
+    renderer.drawServoID(servoCIEData.getServoID());
     renderer.drawDateTimeAt(dateTime.getRTC()); // Draw current RTC time
-    
 
     hostCom.println("LundaLogger now initialized");
   } // init loop
@@ -172,6 +208,9 @@ void loop() {
         servoCIEData.setLastMessageTime(now); // Reset message timer
         servoCIEData.CIE_setup();
         myWiFiServer.setText(servoCIEData.getServoID());
+        const String SSIDStr = LOGGER_SSID;
+        myWiFiServer.setLabel(2, "SSID: " + SSIDStr);
+        myWiFiServer.setLabel(3, servoCIEData.getServoID());
         renderer.drawServoID(servoCIEData.getServoID());
         renderer.drawCOMStatusIndicator(servoCIEData.isComOpen());
       } else {
@@ -200,14 +239,14 @@ void loop() {
       myWiFiServer.begin();
       hostCom.println("Started WiFi");
       hostCom.printf("Access Point IP: %s\n", myWiFiServer.getApIpAddress());
-      renderer.drawWiFiAPIP(myWiFiServer.getApIpAddress() + "  ");
+      renderer.drawWiFiAPIP(myWiFiServer.getApIpAddress() + "  ", LOGGER_SSID);
       renderer.drawWiFiPromt("Press key to disable");
     } else {                                    // Stop WiFi Access Point
       hostCom.println("interactionKey1 short press");
       WiFi.softAPdisconnect(true);              // true = erase settings
       WiFi.mode(WIFI_OFF);                      // turn off WiFi radio
       hostCom.println("WiFi Access Point stopped");
-      renderer.drawWiFiAPIP("WiFi disabled      ");
+      renderer.drawWiFiAPIP("WiFi OFF      ", "No SSID        ");
       renderer.drawWiFiPromt("Press key to enable");
     }
   }

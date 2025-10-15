@@ -21,8 +21,8 @@
 #define TFT_REDDISH_TINT         0xA4B2   
 #define TFT_GREENISH_TINT        0x5DAD
 
-#define lundaLoggerVerLbl "LundaLogger 2025-03-20 1.0.0"
-#define VERSION "1.0.0"
+#define lundaLoggerVerLbl "LundaLogger 2025-10-14 1.1.0"
+#define VERSION "1.1"
 
 #define hostCom Serial
 #define servoCom Serial2
@@ -41,9 +41,10 @@
 #define SET_LOOP_TIME 200000      // slow loop update in [us]
 
 // CIE communication timing
-const unsigned long TIMEOUT_MS = 20000;      // 20 seconds without data = lost
+const unsigned long TIMEOUT_MS = 3000;      // 3 seconds without data = lost
 const unsigned long INIT_INTERVAL_MS = 5000; // Retry INIT every 5 seconds
 
+#define LOGGER_SSID "LundaLoggern"
 
 #include <Arduino.h>
 

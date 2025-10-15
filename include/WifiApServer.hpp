@@ -21,6 +21,9 @@ public:
 
     String getApIpAddress() const;
 
+    bool loadLogoToPsram(const char* path);  // New method for PSRAM image loading
+    void freePsramImage();                  // Frees PSRAM image buffer
+
 private:
     String _ssid, _password;
     const uint16_t* _logoArray;
@@ -41,4 +44,8 @@ private:
 
     String encodeLogoPixelsRGB888(const uint16_t* logo, int size);
     String generateHtmlPage();
+    
+    uint8_t* imageBuffer = nullptr;  // Pointer to image data stored in PSRAM
+    size_t imageSize = 0;            // Size of the image in byte
+
 };
