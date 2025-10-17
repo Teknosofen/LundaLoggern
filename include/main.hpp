@@ -21,7 +21,7 @@
 #define TFT_REDDISH_TINT         0xA4B2   
 #define TFT_GREENISH_TINT        0x5DAD
 
-#define lundaLoggerVerLbl "LundaLogger 2025-10-14 1.1.0"
+#define lundaLoggerVerLbl "LundaLogger 2025-10-16 1.1.2"
 #define VERSION "1.1"
 
 #define hostCom Serial
@@ -41,7 +41,7 @@
 #define SET_LOOP_TIME 200000      // slow loop update in [us]
 
 // CIE communication timing
-const unsigned long TIMEOUT_MS = 3000;      // 3 seconds without data = lost
+const unsigned long TIMEOUT_MS = 8000;      // 3 seconds without data = lost
 const unsigned long INIT_INTERVAL_MS = 5000; // Retry INIT every 5 seconds
 
 #define LOGGER_SSID "LundaLoggern"
