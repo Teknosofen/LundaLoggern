@@ -84,13 +84,6 @@ void WifiApServer::handleFileManager() {
     File root = SD.open("/");
     File file = root.openNextFile();
 
-    // String html = "<!DOCTYPE html><html><head><title>File Manager</title>";
-    // html += "<style>";
-    // html += "table { border-collapse: collapse; width: 100%; max-width: 600px; }";
-    // html += "th, td { padding: 8px; border: 1px solid #ccc; text-align: left; }";
-    // html += "th { background-color: #f0f0f0; }";
-    // html += "</style>";
-
     String html = "<!DOCTYPE html><html><head><title>File Manager</title>";
     html += "<style>";
     html += "body { background-color: #84B6D6; font-family: Arial, sans-serif; color: #000; margin: 20px; }";
@@ -106,12 +99,6 @@ void WifiApServer::handleFileManager() {
     html += "form { text-align: center; margin-top: 15px; }";
     html += "a { color: #000; text-decoration: none; }";
     html += "</style>";
-
-    // html += "button { background-color: #207520; color: white; border: none; padding: 10px 16px; border-radius: 5px; cursor: pointer; font-size: 14px; }";
-    // html += "button:hover { background-color: #1a5f1a; }";
-    // html += "a.button { display: inline-block; margin-top: 20px; padding: 10px 15px; background-color: #207520; color: white; text-decoration: none; border-radius: 5px; font-weight: bold; }";
-    // html += "a.button:hover { background-color: #1a5f1a; }";
-    // html += "</style>";
 
     // --- JavaScript ---
     html += "<script>";
@@ -159,19 +146,6 @@ void WifiApServer::handleFileManager() {
     }
 
     html += "</table><br>";
-
-    // // Download form (GET)
-    // html += "<form id='downloadForm' method='GET' action='/download' onsubmit='copySelection(\"downloadForm\")'>";
-    // html += "<button type='submit'>Download Selected</button>";
-    // html += "</form> ";
-
-    // // Delete form (POST, with confirmation)
-    // html += "<form id='deleteForm' method='POST' action='/delete' ";
-    // html += "onsubmit='copySelection(\"deleteForm\"); confirmDelete(event)'>";
-    // html += "<button type='submit'>Delete Selected</button>";
-    // html += "</form>";
-
-    // html += "<br><br><a href='/'>Back to Main Page</a>";
 
     // --- Buttons (same style as on main page) ---
     html += "<form id='downloadForm' method='GET' action='/download' onsubmit='copySelection(\"downloadForm\")'>";
@@ -264,12 +238,6 @@ void WifiApServer::handleConfigViewer() {
     html += "button:hover { background-color: #005FA3; }";
     html += "form { text-align: center; margin-top: 20px; }";
     html += "</style></head><body>";
-
-
-    // html += "pre { background-color: #e0f8e0; padding: 10px; border: 1px solid #207520; border-radius: 6px; white-space: pre-wrap; word-wrap: break-word; }";
-    // html += "a.button { display: inline-block; margin-top: 20px; padding: 10px 15px; background-color: #207520; color: white; text-decoration: none; border-radius: 5px; font-weight: bold; }";
-    // html += "a.button:hover { background-color: #1a5f1a; }";
-    // html += "</style></head><body>";
     
     html += "<h2>Configuration Files</h2>";
 
@@ -295,11 +263,6 @@ void WifiApServer::handleConfigViewer() {
     html += "<h3>SettingConfig.txt</h3>";
     html += "<pre>" + readFileContent("/SettingConfig.txt") + "</pre>";
 
-    // // --- Back button ---
-    // html += "<div style='text-align: center;'>";
-    // html += "<a class='button' href='/'>Back to Main Page</a>";
-    // html += "</div>";
-
     // --- Back Button ---
     html += "<form method='GET' action='/'>";
     html += "<button type='submit'>Back to Main Page</button>";
@@ -309,52 +272,6 @@ void WifiApServer::handleConfigViewer() {
 
     server.send(200, "text/html", html);
 }
-
-// void WifiApServer::handleConfigViewer() {
-//     String html = "<!DOCTYPE html><html><head><title>Configuration Files</title>";
-
-//     // html += "<style>pre { background-color: #f4f4f4; padding: 10px; border: 1px solid #ccc; }</style>";
-//     // html += "</head><body>";
-    
-//     // 🌈 Apply unified color theme and soft styling
-//     html += "<style>";
-//     html += "body { background-color: #84B6D6; font-family: Arial, sans-serif; color: #000; margin: 20px; }";
-//     html += "h2, h3 { text-align: center; }";
-//     html += "pre { background-color: #e0f8e0; padding: 10px; border: 1px solid #207520; border-radius: 6px; white-space: pre-wrap; word-wrap: break-word; }";
-//     html += "a.button { display: inline-block; margin-top: 20px; padding: 10px 15px; background-color: #207520; color: white; text-decoration: none; border-radius: 5px; font-weight: bold; }";
-//     html += "a.button:hover { background-color: #1a5f1a; }";
-//     html += "</style></head><body>";
-
-    
-//     html += "<h2>Configuration Files</h2>";
-
-//     auto readFileContent = [](const char* path) -> String {
-//         File file = SPIFFS.open(path, "r");
-//         if (!file) {
-//             return String("[Error: Could not open ") + path + "]";
-//         }
-//         String content;
-//         while (file.available()) {
-//             content += (char)file.read();
-//         }
-//         file.close();
-//         return content;
-//     };
-
-//     // MetricConfig.txt
-//     html += "<h3>MetricConfig.txt</h3>";
-//     html += "<pre>" + readFileContent("/MetricConfig.txt") + "</pre>";
-
-//     // SettingConfig.txt
-//     html += "<h3>SettingConfig.txt</h3>";
-//     html += "<pre>" + readFileContent("/SettingConfig.txt") + "</pre>";
-
-//     html += "<br><a href='/'>Back to Main Page</a>";
-//     html += "</body></html>";
-
-//     server.send(200, "text/html", html);
-// }
-
 
 extern SDManager sd; // Add this at top of file
 

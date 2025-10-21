@@ -37,7 +37,7 @@ SDManager sd(hspi, HSPI_CS, &dateTime); // Pass your CS pin here
 
 ServoCIEData servoCIEData(&sd);
 
-WifiApServer myWiFiServer(LOGGER_SSID, ""); //"neonatal");
+WifiApServer myWiFiServer(LOGGER_SSID, LOGGER_PW); //"neonatal");
 
 DateTime dateTime; // Global DateTime object
 

@@ -127,26 +127,6 @@ void ImageRenderer::drawWiFiPromt(String WiFiPrompt) {
     tft.drawString(WiFiPrompt,  wiFiPromptPos.x, wiFiPromptPos.y , 2); // Print another message on the display, small font
 }
 
-// void ImageRenderer::drawBreathPhase(uint8_t breathPhase) {
-//     // Draw a simple representation of the breath phase
-//     const int centerX = phasePos.x;
-//     const int centerY = phasePos.y;
-//     const int radius = 30;
-
-//     // Clear previous phase indicator
-//     tft.fillCircle(centerX, centerY, radius + 2, TFT_LOGOBACKGROUND);
-
-//     // Draw new phase indicator
-//     uint16_t color;
-//     switch (breathPhase) {
-//         case 0: color = TFT_BLUE; break;   // Inhale
-//         case 1: color = TFT_GREEN; break;  // Hold
-//         case 2: color = TFT_RED; break;    // Exhale
-//         default: color = TFT_LOGOBACKGROUND; break;  // Unknown
-//     }
-//     tft.fillCircle(centerX, centerY, radius, color);
-// } 
-
 
 void ImageRenderer::drawString(const String& text, int x, int y, int font) {
     tft.drawString(text, x, y, font);
@@ -398,3 +378,24 @@ void ImageRenderer:: drawBreathPhase(uint8_t phase) {
     // tft.print(phaseString);
     prevPhase = phaseString;
   }
+
+  
+// void ImageRenderer::drawBreathPhase(uint8_t breathPhase) {
+//     // Draw a simple representation of the breath phase
+//     const int centerX = phasePos.x;
+//     const int centerY = phasePos.y;
+//     const int radius = 30;
+
+//     // Clear previous phase indicator
+//     tft.fillCircle(centerX, centerY, radius + 2, TFT_LOGOBACKGROUND);
+
+//     // Draw new phase indicator
+//     uint16_t color;
+//     switch (breathPhase) {
+//         case 0: color = TFT_BLUE; break;   // Inhale
+//         case 1: color = TFT_GREEN; break;  // Hold
+//         case 2: color = TFT_RED; break;    // Exhale
+//         default: color = TFT_LOGOBACKGROUND; break;  // Unknown
+//     }
+//     tft.fillCircle(centerX, centerY, radius, color);
+// } 

@@ -21,7 +21,7 @@
 #define TFT_REDDISH_TINT         0xA4B2   
 #define TFT_GREENISH_TINT        0x5DAD
 
-#define lundaLoggerVerLbl "LundaLogger 2025-10-16 1.1.2"
+#define lundaLoggerVerLbl "LundaLogger 2025-10-17 1.1.3"
 #define VERSION "1.1"
 
 #define hostCom Serial
@@ -45,6 +45,7 @@ const unsigned long TIMEOUT_MS = 8000;      // 3 seconds without data = lost
 const unsigned long INIT_INTERVAL_MS = 5000; // Retry INIT every 5 seconds
 
 #define LOGGER_SSID "LundaLoggern"
+#define LOGGER_PW "neonatal"
 
 #include <Arduino.h>
 
