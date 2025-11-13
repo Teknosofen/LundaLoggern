@@ -217,6 +217,15 @@ void loop() {
         hostCom.println("❌ CIE communication re-check failed.");
       }
       servoCIEData.setLastInitAttempt(now);
+
+      // Add check for num connected clients here, if there are client connected, present the second QR code and info
+      // add check for num clients in WiFi class:
+      // assume that WiFi iff will return zero clients
+      // int numClients = WiFi.softAPgetStationNum();
+      //     if (numClients > 0 && !qr.isShowingHomepageQR()) {
+      // qr.showHomepageQR("http://192.168.4.1/");
+      // 
+
     }
   }
   // check for and manage serial data from CIE and ventilator
@@ -241,6 +250,8 @@ void loop() {
       hostCom.printf("Access Point IP: %s\n", myWiFiServer.getApIpAddress());
       renderer.drawWiFiAPIP(myWiFiServer.getApIpAddress() + "  ", LOGGER_SSID);
       renderer.drawWiFiPromt("Press key to disable");
+      // Add QR stuff here
+
     } else {                                    // Stop WiFi Access Point
       hostCom.println("interactionKey1 short press");
       WiFi.softAPdisconnect(true);              // true = erase settings

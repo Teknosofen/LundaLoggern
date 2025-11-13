@@ -62,6 +62,7 @@ const unsigned long INIT_INTERVAL_MS = 5000; // Retry INIT every 5 seconds
 #include <SPI.h>
 #include "SDManager.hpp"
 #include "WifiApServer.hpp"
+#include <qrcode.h>
 
 #include "ServoCIEData.hpp"
 // const char* MetricConfigPath = "/MetricConfig.txt";
