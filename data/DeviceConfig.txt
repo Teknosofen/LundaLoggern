@@ -1,0 +1,12 @@
+# LundaLoggern Device Settings
+# ----------------------------------------------------------
+# Key	Value	Description
+# ----------------------------------------------------------
+# Lines starting with '#' are comments and ignored by the parser.
+# Format: Key<TAB>Value
+# This file follows the same SD → SPIFFS fallback/sync logic
+# as MetricConfig.txt and SettingConfig.txt.
+# ----------------------------------------------------------
+SSID	LundaLoggern
+Password	neonatal
+WiFiAutoOff_min	5

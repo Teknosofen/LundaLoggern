@@ -119,11 +119,14 @@ void ServoCIEData::handleSettingsData(uint8_t NextSCI_chr) {
 void ServoCIEData::handleValueData(uint8_t NextSCI_chr) {
     switch (CurveCounter) {
         case 0:
-            if (ByteCount == 2) { cieCurve1 = 256 * NextSCI_chr; --ByteCount; }
+        
+            if (ByteCount == 2) { hostCom.print("C0:\t"); cieCurve1 = 256 * NextSCI_chr; --ByteCount; }
             else if (ByteCount == 1) {
                 cieCurve1 += NextSCI_chr;
                 curves[CurveCounter].unscaled = cieCurve1;
+                hostCom.printf("%d\t", cieCurve1);
                 curves[CurveCounter].scaled = cieCurve1 * curves[0].scaleFactor - curves[0].offset;
+                hostCom.printf("%.2f\t", curves[CurveCounter].scaled);
                 RunMode = Run_Mode;
                 --ByteCount;
                 CurveCounter = (curveCount > 1) ? 1 : 0;
@@ -131,11 +134,14 @@ void ServoCIEData::handleValueData(uint8_t NextSCI_chr) {
             break;
 
         case 1:
-            if (ByteCount == 2) { cieCurve2 = 256 * NextSCI_chr; --ByteCount; }
+            
+            if (ByteCount == 2) { hostCom.print("C1:\t"); cieCurve2 = 256 * NextSCI_chr; --ByteCount; }
             else if (ByteCount == 1) {
                 cieCurve2 += NextSCI_chr;
                 curves[CurveCounter].unscaled = cieCurve2;
+                hostCom.printf("%d\t", cieCurve2);
                 curves[CurveCounter].scaled = cieCurve2 * curves[1].scaleFactor - curves[1].offset;
+                hostCom.printf("%.2f\t", curves[CurveCounter].scaled);
                 RunMode = Run_Mode;
                 --ByteCount;
                 CurveCounter = (curveCount > 2) ? 2 : 0;
@@ -143,11 +149,14 @@ void ServoCIEData::handleValueData(uint8_t NextSCI_chr) {
             break;
 
         case 2:
-            if (ByteCount == 2) { cieCurve3 = 256 * NextSCI_chr; --ByteCount; }
+            
+            if (ByteCount == 2) { hostCom.print("C2:\t"); cieCurve3 = 256 * NextSCI_chr; --ByteCount; }
             else if (ByteCount == 1) {
                 cieCurve3 += NextSCI_chr;
                 curves[CurveCounter].unscaled = cieCurve3;
+                hostCom.printf("%d\t", cieCurve3);
                 curves[CurveCounter].scaled = cieCurve3 * curves[2].scaleFactor - curves[2].offset;
+                hostCom.printf("%.2f\n", curves[CurveCounter].scaled);
                 RunMode = Run_Mode;
                 --ByteCount;
                 CurveCounter = (curveCount > 3) ? 3 : 0;
