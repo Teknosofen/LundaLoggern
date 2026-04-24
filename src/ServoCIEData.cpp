@@ -194,7 +194,45 @@ void ServoCIEData::handleTrendData(uint8_t NextSCI_chr) {
 
 void ServoCIEData::handleAlarmData(uint8_t NextSCI_chr) {
     if (NextSCI_chr == EndFlag) {
+        // All alarm pairs received — log to SD
+        String newFilename, dataStr;
+        bool isNewFile = sdManager->updateFileNameIfChanged('A', newFilename);
+        if (isNewFile) {
+            dataStr = "Data from: " + getServoID() + "\n";
+            dataStr += "Timestamp\t" + getAlarmLabelsAsString();
+            sdManager->appendData(dataStr, 'A');
+            hostCom.print(dataStr);
+        }
+        dataStr = dateTime.getRTC().toString() + "\t" + getAlarmValuesAsString();
+        sdManager->appendData(dataStr, 'A');
+        setLastMessageTime(millis());
+        hostCom.print(dataStr);
+
+        alarmNo = 0;
+        alarmPrioReceived = false;
         RunMode = End_Flag_Found;
+        return;
+    }
+
+    if (!alarmPrioReceived) {
+        // First byte of pair = priority
+        currentAlarmPrio = NextSCI_chr;
+        alarmPrioReceived = true;
+    } else {
+        // Second byte of pair = alarm value
+        if (alarmNo < (unsigned int)alarmCount) {
+            // Check for "not applicable" marker (0x7EFF)
+            uint16_t combined = (currentAlarmPrio << 8) | NextSCI_chr;
+            if (combined == cieDataInvalid) {
+                alarms[alarmNo].unscaled = cieDataInvalid;
+                alarms[alarmNo].scaled = -1;  // flag as N/A
+            } else {
+                alarms[alarmNo].unscaled = NextSCI_chr;  // 0=No alarm, 1=Active, 2=Silenced
+                alarms[alarmNo].scaled = currentAlarmPrio; // Store priority in scaled field
+            }
+        }
+        alarmNo++;
+        alarmPrioReceived = false;
     }
 }
 
@@ -486,6 +524,8 @@ bool ServoCIEData::CIE_setup() {
     strcat(CMD_SDADB, concatConfigChannels(metrics, metricCount).c_str());  // Append PAYLOAD_SDADB to CMD_SDADB
     strcpy(CMD_SDADS, "SDADS"); // strcpy(PAYLOAD_SDADS, "400405408414406420410409437419");
     strcat(CMD_SDADS, concatConfigChannels(settings, settingCount).c_str());  // Append PAYLOAD_SDADB to CMD_SDADB
+    strcpy(CMD_SDADA, "SDADA");
+    strcat(CMD_SDADA, concatConfigChannels(alarms, alarmCount).c_str());  // Append alarm channels
     strcpy(CMD_SDADC, "SDADC");
     strcpy(PAYLOAD_SDADC, "000004001");
     strcat(CMD_SDADC, PAYLOAD_SDADC);  // Append PAYLOAD_SDADC to CMD_SDADC
@@ -531,6 +571,10 @@ bool ServoCIEData::CIE_setup() {
     Send_SERVO_CMD_ASCII(CMD_SDADS);
     getCIEResponse();
 
+    // Alarm channels
+    Send_SERVO_CMD_ASCII(CMD_SDADA);
+    getCIEResponse();
+
     // Curve channels
     Send_SERVO_CMD_ASCII(CMD_SDADC);
     getCIEResponse();
@@ -558,7 +602,7 @@ bool ServoCIEData::CIE_setup() {
     return true;
 }
 
-void ServoCIEData::initializeConfigs(const char* metricPath, const char* settingPath, const char* curvePath) {
+void ServoCIEData::initializeConfigs(const char* metricPath, const char* settingPath, const char* curvePath, const char* alarmPath) {
     bool metricConfigLoaded = false;
     bool settingConfigLoaded = false;
     bool curveConfigLoaded = false;
@@ -603,13 +647,30 @@ void ServoCIEData::initializeConfigs(const char* metricPath, const char* setting
                 syncConfigSPIFFSToSD(curvePath);
                 curveConfigLoaded = true;
             }
-        }   
+        }
+
+        if (alarmPath) {
+            if (loadConfigFromSD(alarmPath, alarms, alarmCount, MaxAlarms)) {
+                syncConfigSDToSPIFFS(alarmPath);
+                alarmConfigLoaded = true;
+            } else {
+                hostCom.println("⚠ AlarmConfig SD file missing, trying SPIFFS...");
+                if (loadConfigFromSPIFFS(alarmPath, alarms, alarmCount, MaxAlarms)) {
+                    hostCom.println("✔ AlarmConfig loaded from SPIFFS");
+                    syncConfigSPIFFSToSD(alarmPath);
+                    alarmConfigLoaded = true;
+                }
+            }
+        }
     } else {
         hostCom.println("⚠ SD mount failed, using SPIFFS only...");
         if (begin()) {
             metricConfigLoaded = loadConfigFromSPIFFS(metricPath, metrics, metricCount, MaxMetrics);
             settingConfigLoaded = loadConfigFromSPIFFS(settingPath, settings, settingCount, MaxSettings);
             curveConfigLoaded = loadConfigFromSPIFFS(curvePath, curves, curveCount, MaxCurves);
+            if (alarmPath) {
+                alarmConfigLoaded = loadConfigFromSPIFFS(alarmPath, alarms, alarmCount, MaxAlarms);
+            }
         }
     }
 
@@ -629,6 +690,12 @@ void ServoCIEData::initializeConfigs(const char* metricPath, const char* setting
         printAllConfigs(curves, curveCount, curvePath);
     } else {
         hostCom.println("❌ No curve configs loaded.");
+    }
+
+    if (alarmConfigLoaded) {
+        printAllConfigs(alarms, alarmCount, alarmPath);
+    } else {
+        hostCom.println("❌ No alarm configs loaded.");
     }
 }
 
@@ -842,5 +909,38 @@ String ServoCIEData::getUnitsAsString(const Configs* configsArray, int count) {
         result += (i < count - 1) ? '\t' : '\n';
     }
     return result;
+}
+
+String ServoCIEData::getAlarmLabelsAsString() {
+    String result = "";
+    for (int i = 0; i < alarmCount; ++i) {
+        result += alarms[i].label;
+        result += (i < alarmCount - 1) ? '\t' : '\n';
+    }
+    return result;
+}
+
+String ServoCIEData::getAlarmValuesAsString() {
+    // Format: "prio:status" per channel, tab-separated
+    // prio: 0=undefined, 1=low, 2=medium, 3=high
+    // status: 0=No alarm, 1=Active, 2=Silenced
+    String result = "";
+    for (int i = 0; i < alarmCount; ++i) {
+        uint16_t val = alarms[i].unscaled;
+        if (val == cieDataInvalid) {
+            result += "N/A";
+        } else {
+            result += String((int)alarms[i].scaled) + ":" + String(val);
+        }
+        result += (i < alarmCount - 1) ? '\t' : '\n';
+    }
+    return result;
+}
+
+bool ServoCIEData::hasActiveAlarm() const {
+    for (int i = 0; i < alarmCount; ++i) {
+        if (alarms[i].unscaled == 1 || alarms[i].unscaled == 2) return true;
+    }
+    return false;
 }
 

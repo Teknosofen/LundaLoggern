@@ -21,7 +21,7 @@
 #define TFT_REDDISH_TINT         0xA4B2   
 #define TFT_GREENISH_TINT        0x5DAD
 
-#define lundaLoggerVerLbl "LundaLogger 2025-10-17 1.1.3"
+#define lundaLoggerVerLbl "LundaLogger 2026-04-24 1.2.0"
 #define VERSION "1.1"
 
 #define hostCom Serial

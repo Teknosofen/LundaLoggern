@@ -29,6 +29,7 @@ ImageRenderer renderer(tft);
 const char* MetricConfigPath  = "/MetricConfig.txt";
 const char* SettingConfigPath = "/SettingConfig.txt";
 const char* CurveConfigPath   = "/CurveConfig.txt";
+const char* AlarmConfigPath   = "/AlarmConfig.txt";
 
 SPIClass hspi(HSPI);
 const SPISettings SENSOR_SPI_SETTINGS = SPISettings(25000000, MSBFIRST, SPI_MODE0); // 25 MHz
@@ -94,7 +95,7 @@ void setup() {
   }
   
   hostCom.println("Initializing CIE configs:");
-  servoCIEData.initializeConfigs(MetricConfigPath, SettingConfigPath, CurveConfigPath);
+  servoCIEData.initializeConfigs(MetricConfigPath, SettingConfigPath, CurveConfigPath, AlarmConfigPath);
   hostCom.println("Initializing CIE com:");
   servoCIEData.begin();
   // myWiFiServer.setText(servoCIEData.getServoID());

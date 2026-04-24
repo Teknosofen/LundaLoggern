@@ -50,7 +50,7 @@ public:
     void CRC_calcASCII(const char* localstring, char* outHex); // New CRC function: returns 2 ASCII hex characters via outHex
    
     String concatConfigChannels(const Configs configs[], int numConfigs);
-    void initializeConfigs(const char* metricPath, const char* settingPath, const char* curvePath = nullptr);
+    void initializeConfigs(const char* metricPath, const char* settingPath, const char* curvePath = nullptr, const char* alarmPath = nullptr);
    
     // Communication status
     void setComOpen(bool state);
@@ -81,6 +81,10 @@ public:
     int curveCount = 0;
     bool curveConfigLoaded = false;
 
+    static const int MaxAlarms = 100;
+    Configs alarms[MaxAlarms];
+    int alarmCount = 0;
+    bool alarmConfigLoaded = false;
 
     // bool begin();  // Initializes SPIFFS
 
@@ -107,6 +111,11 @@ public:
 
     String getServoID();    // returns servo type and serial num
     uint8_t getBreathPhase();   // return the present breath state, insp, exp or pause
+
+    // Alarm helpers
+    String getAlarmLabelsAsString();
+    String getAlarmValuesAsString();
+    bool hasActiveAlarm() const;
 
 private:
 
@@ -171,6 +180,7 @@ private:
     char CMD_RADAB[8];
     char CMD_RADAS[8];
     char CMD_RADC[8];
+    char CMD_SDADA[400];  // SDADA + up to 100 alarm channel numbers
 
     char tempCommand[128];
 
@@ -199,6 +209,11 @@ private:
     unsigned int MetricNo = 0; // count which metric is currently being received
     unsigned int settingsNo = 0; // count which setting is currently being received
     unsigned int CurveCounter = 0; // Count which curve is presently being managed
+
+    // Alarm parsing state
+    unsigned int alarmNo = 0;         // counter for which alarm pair is being received
+    bool alarmPrioReceived = false;   // tracks prio/value byte pair state
+    uint8_t currentAlarmPrio = 0;     // stores the priority byte temporarily
     
     // #define NumberOfCurves 3 // Totalnumber of curves to receive from SCI/CIE
     // should use curveCount instead

@@ -1,6 +1,6 @@
 # LundaLoggern — Design Summary
 
-**Version:** 1.1.3 (2025-10-17)  
+**Version:** 1.2.0 (2026-04-24)  
 **Author:** Åke L  
 **Platform:** LilyGo T-Display S3 (ESP32-S3)  
 **Framework:** Arduino (PlatformIO)
@@ -9,7 +9,7 @@
 
 ## 1. Purpose
 
-LundaLoggern is a portable, standalone data logger designed for **SERVO-u intensive care ventilators**. It continuously captures real-time ventilator metrics, settings, and waveform curve data via the ventilator's CIE (Computer Interface Equipment) serial interface and stores them as timestamped log files on an SD card. A built-in WiFi access point and web server allow clinical/engineering staff to download, review, and manage logged data wirelessly from any device with a browser.
+LundaLoggern is a portable, standalone data logger designed for **SERVO-u intensive care ventilators**. It continuously captures real-time ventilator metrics, settings, waveform curve data, and **alarm events** via the ventilator's CIE (Computer Interface Equipment) serial interface and stores them as timestamped log files on an SD card. A built-in WiFi access point and web server allow clinical/engineering staff to download, review, and manage logged data wirelessly from any device with a browser.
 
 ---
 
@@ -60,9 +60,9 @@ LundaLoggern is a portable, standalone data logger designed for **SERVO-u intens
 
 | Class | Responsibility |
 |---|---|
-| **`ServoCIEData`** | CIE protocol parser and command engine. Manages metric, setting, and curve configurations. Handles serial communication with the ventilator, CRC calculation, data scaling, and log file writing via `SDManager`. |
-| **`SDManager`** | Abstracts all SD card operations (init, read, write, append, delete, file listing). Monitors card presence and manages SPI bus access. Generates date-stamped file names via `DateTime`. |
+| **`ServoCIEData`** | CIE protocol parser and command engine. Manages metric, setting, curve, and alarm configurations. Handles serial communication with the ventilator, CRC calculation, data scaling, alarm state tracking, and log file writing via `SDManager`. |
 | **`WifiApServer`** | Creates a WiFi SoftAP and HTTP web server. Serves an HTML dashboard for file downloads, file deletion, and configuration review. Displays device logo and status labels. |
+| **`SDManager`** | Abstracts all SD card operations (init, read, write, append, delete, file listing). Monitors card presence and manages SPI bus access. Generates date-stamped file names via `DateTime`. |
 | **`ImageRenderer`** | Drives the TFT display via TFT_eSPI. Renders the main screen layout including logo, status indicators (SD, COM), WiFi info, ventilator ID, date/time, and breath-phase indicator. |
 | **`DateTime`** | Date/time value object with RTC integration. Provides formatted strings for timestamps and file naming. Parses time from ventilator RTIM responses. |
 | **`Button`** | Interrupt-driven button handler with debounce, short-press, and long-press detection. |
@@ -89,7 +89,7 @@ SERVO-u Ventilator
 ```
 
 1. **Ventilator → ServoCIEData**: Raw bytes arrive on UART2 and are parsed character-by-character through a state machine (`RunModeType`). States include `Breath_Data`, `Value_Data`, `Phase_Data`, `Settings_Data`, `Trend_Data`, `Alarm_Data`, and `Error_Data`.
-2. **ServoCIEData → SDManager**: Parsed and scaled values are formatted into CSV-like text lines and appended to date-stamped log files on the SD card.
+2. **ServoCIEData → SDManager**: Parsed and scaled values (metrics, settings) and alarm priority/status pairs are formatted into tab-separated text lines and appended to date-stamped log files on the SD card (`metrics_*.txt`, `settings_*.txt`, `alarms_*.txt`).
 3. **ServoCIEData → ImageRenderer**: Device identity (type + serial number) and breath-phase state are pushed to the display.
 4. **SDManager → WifiApServer**: The web server lists SD files and serves them for download or deletion.
 5. **DateTime**: Ventilator-derived time (via `RTIM` command) seeds the internal RTC, which timestamps every logged data point and names log files.
@@ -98,7 +98,7 @@ SERVO-u Ventilator
 
 ## 4. Configuration System
 
-Configuration is stored as tab-separated text files, loaded from the SD card (with SPIFFS as fallback/sync). Three configuration types exist:
+Configuration is stored as tab-separated text files, loaded from the SD card (with SPIFFS as fallback/sync). Four configuration types exist:
 
 ### MetricConfig.txt — Breath-by-breath measured values
 | Column | Meaning | Example |
@@ -115,7 +115,28 @@ Same column format as metrics, using channel numbers in the 400-range (e.g., RR,
 ### CurveConfig.txt — High-frequency waveform channels
 Adds an `active` flag (true/false) to enable/disable individual curve channels (Flow, Pressure, Volume, Edi, FCO2).
 
-### DeviceConfig.txt — Device-level settings (NEW)
+### AlarmConfig.txt — Ventilator alarm channels
+Defines which SCI alarm channels (800–999) to subscribe to and log. Same tab-separated format as metrics/settings.
+
+| Column | Meaning | Example |
+|---|---|---|
+| Channel | CIE alarm channel number (800–999) | `805` |
+| Label | Human-readable alarm name | `Apnea` |
+| Unit | Type identifier (always `AD`) | `AD` |
+| Scale Factor | Not used for alarms (set to `1.0`) | `1.0` |
+| Offset | Not used for alarms (set to `0.0`) | `0.0` |
+| Active | Enable/disable this alarm channel | `true` |
+
+Alarm data from SCI is transmitted as **priority/value byte pairs** (not gain/offset-scaled values). Each alarm has:
+- **Priority**: `0` = undefined, `1` = low, `2` = medium, `3` = high
+- **Status**: `0` = no alarm, `1` = alarm active, `2` = alarm active but silenced
+- **Not applicable**: The special value `0x7EFF` indicates the alarm channel does not apply in the current ventilation mode.
+
+Logged format is `prio:status` per channel (e.g., `3:1` = high priority, active; `0:0` = no alarm; `N/A` = not applicable).
+
+Default channels include O2 concentration, EtCO2, airway pressure, apnea, gas supply, battery, disconnect, leakage, respiratory rate, minute volume, tidal volume alarms, and summary alarm channels (995–999).
+
+### DeviceConfig.txt — Device-level settings
 A key-value configuration file for parameters that govern the device itself (as opposed to ventilator data channels). Lines starting with `#` are comments.
 
 | Key | Default | Description |
@@ -136,7 +157,7 @@ The device communicates with SERVO ventilators using the **CIE (Computer Interfa
 
 - **Physical layer**: RS232, 38 400 baud, 8 data bits, even parity, 1 stop bit (8E1)
 - **Initialization**: Sends `RTIM` (request time), `RCTY` (request device type), `RSEN` (request serial number) commands to identify the ventilator.
-- **Data subscription**: Sends `SDADB` / `SDADS` / `SDADC` commands to subscribe to breath data, settings, and curve channels respectively.
+- **Data subscription**: Sends `SDADB` / `SDADS` / `SDADA` / `SDADC` commands to subscribe to breath data, settings, alarm, and curve channels respectively.
 - **Framing**: Uses `EOT` (0x04) and `ESC` (0x1B) as delimiters; CRC-8 for integrity.
 - **Timeout handling**: If no data is received for 8 seconds, the connection is marked lost and re-initialization is attempted every 5 seconds.
 
@@ -150,7 +171,7 @@ The device communicates with SERVO ventilators using the **CIE (Computer Interfa
 - **Web pages**:
   - **Home / Dashboard**: Displays version, device ID, status labels, and logo.
   - **File Manager**: Lists all SD card log files with download and delete actions.
-  - **Config Viewer**: Shows currently loaded metric/setting/curve configurations.
+  - **Config Viewer**: Shows currently loaded metric, setting, curve, and alarm configurations.
 - **QR Code**: Display can show a QR code for quick WiFi connection from a phone.
 
 ---
@@ -182,6 +203,83 @@ The 320 × 170 TFT is divided into functional zones:
 
 **Build flags**: USB CDC on boot, HSPI pin definitions, display variant selection.
 
+### 8.1 Preparing a New Board (First-Time Setup)
+
+When programming a brand-new LilyGo T-Display S3, three separate upload steps are needed:
+
+#### Step 1 — Upload the SPIFFS filesystem image
+
+The `data/` folder contains factory-default configuration files and image assets that must be flashed to the on-chip SPIFFS partition. This only needs to be done **once per new board** (or after a full flash erase), and again whenever files in `data/` are changed.
+
+**From the PlatformIO CLI** (VS Code terminal):
+
+```
+pio run --target uploadfs
+```
+
+**From the VS Code GUI**: Open the PlatformIO sidebar → Project Tasks → *lilygo-t-display-s3* → Platform → **Upload Filesystem Image**.
+
+This uploads the following files to SPIFFS:
+
+| File | Purpose |
+|---|---|
+| `MetricConfig.txt` | Breath-by-breath metric channel definitions |
+| `SettingConfig.txt` | Ventilator setting channel definitions |
+| `CurveConfig.txt` | Waveform curve channel definitions |
+| `AlarmConfig.txt` | Alarm channel subscriptions (800–999) |
+| `DeviceConfig.txt` | WiFi SSID, password, and auto-off timeout |
+| `LogoWeb.png` | Logo served by the web interface |
+| `logo150.bmp` | Logo displayed on TFT (loaded to PSRAM) |
+
+> **Note:** SPIFFS does not support subdirectories. All files are placed in the root `/` of the SPIFFS partition.
+
+If SPIFFS needs to be erased/reformatted (e.g. corruption or partition layout change):
+
+```
+pio run --target cleanfs
+```
+
+Then re-upload the filesystem image with `uploadfs`.
+
+#### Step 2 — Upload the firmware
+
+```
+pio run --target upload
+```
+
+Or use PlatformIO sidebar → **Upload**.
+
+#### Step 3 — Prepare the SD card
+
+Insert a FAT32-formatted MicroSD card. On first boot the device will attempt to read configuration files from the SD card. If they are not found, it falls back to SPIFFS and automatically copies its factory defaults to the SD card (`syncConfigSPIFFSToSD`). From that point on, the SD card copy is the primary configuration source.
+
+To use **customised** configurations, place edited copies of `MetricConfig.txt`, `SettingConfig.txt`, `CurveConfig.txt`, `AlarmConfig.txt`, and/or `DeviceConfig.txt` on the SD card root before first boot. The device will load those and sync them back to SPIFFS.
+
+### 8.2 TFT_eSPI Library Configuration
+
+The TFT_eSPI library requires a one-time manual setup in its installed library folder. After the first build (which downloads the library), locate the TFT_eSPI folder inside `.pio/libdeps/lilygo-t-display-s3/TFT_eSPI/` and verify:
+
+1. **`User_Setup_Select.h`** — Ensure the LilyGo T-Display S3 setup is enabled:
+   ```cpp
+   #include <User_Setups/Setup206_LilyGo_T_Display_S3.h>
+   ```
+   All other `#include` lines for other boards should be commented out.
+
+2. Alternatively, the project includes `include/My_Display_Setup.h` which defines:
+   - `ST7789_DRIVER`
+   - `TFT_WIDTH 170` / `TFT_HEIGHT 320`
+   - The correct SPI pin assignments for the T-Display S3
+
+### 8.3 Rebuilding After Configuration Changes
+
+| What changed | Action needed |
+|---|---|
+| Source code (`.cpp` / `.hpp`) | `pio run --target upload` |
+| Files in `data/` folder | `pio run --target uploadfs` (re-flash SPIFFS) |
+| Config files on SD card only | No rebuild — just reboot the device |
+| `platformio.ini` build flags | Clean build: `pio run --target clean` then `pio run --target upload` |
+| TFT_eSPI library settings | Delete `.pio/libdeps/` and rebuild, then re-apply display setup |
+
 ---
 
 ## 9. File Structure
@@ -194,6 +292,7 @@ LundaLoggern/
 │   ├── MetricConfig.txt
 │   ├── SettingConfig.txt
 │   ├── CurveConfig.txt
+│   ├── AlarmConfig.txt         # Alarm channel subscriptions (800-999)
 │   └── DeviceConfig.txt        # SSID, password, WiFi auto-off
 ├── Documentation/              # Non-code documentation
 ├── include/                    # Header files
@@ -227,7 +326,8 @@ LundaLoggern/
 2. **Character-by-character CIE parsing**: A state machine processes each incoming byte, allowing the main loop to remain non-blocking.
 3. **Button-controlled WiFi**: WiFi and the web server are off by default to minimise power consumption and RF interference in clinical environments. The operator must explicitly activate them via a long-press of the interaction button, and can shut them down again with a short-press.
 4. **Ventilator-derived time**: No RTC module is needed; the device obtains accurate timestamps from the connected ventilator.
-5. **Configurable channels**: Which metrics, settings, and curves to log are fully configurable via text files, enabling adaptation to different clinical needs without recompilation.
+5. **Configurable channels**: Which metrics, settings, curves, and alarms to log are fully configurable via text files, enabling adaptation to different clinical needs without recompilation.
+6. **Alarm logging**: Alarm data is parsed from the SCI `RADC` continuous data stream (flag byte `0x41` / `'A'`), which transmits priority/status byte pairs whenever any subscribed alarm state changes. Up to 100 alarm channels can be subscribed via the `SDADA` command. Alarms are logged to separate `alarms_YYYYMMDD_HHMM.txt` files with the same 12-hour rolling window as metrics and settings.
 
 ---
 

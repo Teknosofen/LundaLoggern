@@ -263,6 +263,10 @@ void WifiApServer::handleConfigViewer() {
     html += "<h3>SettingConfig.txt</h3>";
     html += "<pre>" + readFileContent("/SettingConfig.txt") + "</pre>";
 
+    // --- AlarmConfig.txt ---
+    html += "<h3>AlarmConfig.txt</h3>";
+    html += "<pre>" + readFileContent("/AlarmConfig.txt") + "</pre>";
+
     // --- Back Button ---
     html += "<form method='GET' action='/'>";
     html += "<button type='submit'>Back to Main Page</button>";
