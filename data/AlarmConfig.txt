@@ -7,14 +7,24 @@
 806	Gas supply alarm	AD	1.0	0.0	true
 807	Battery alarm	AD	1.0	0.0	true
 809	Battery operation	AD	1.0	0.0	true
+810	No consistent pat effort	AD	1.0	0.0	true
 811	Airway press cont high	AD	1.0	0.0	true
+812	Overrange alarm	AD	1.0	0.0	true
 815	No patient effort	AD	1.0	0.0	true
 816	Leakage too high	AD	1.0	0.0	true
 817	Disconnect alarm	AD	1.0	0.0	true
+818	Pressure limitation	AD	1.0	0.0	true
 819	RR high	AD	1.0	0.0	true
 820	RR low	AD	1.0	0.0	true
+821	PEEP high	AD	1.0	0.0	true
+822	PEEP low	AD	1.0	0.0	true
 829	MVe high	AD	1.0	0.0	true
 830	MVe low	AD	1.0	0.0	true
+833	Edi signal invalid	AD	1.0	0.0	true
+837	Flow through exp tube	AD	1.0	0.0	true
+840	HF tidal vol high	AD	1.0	0.0	true
+841	HF tidal vol low	AD	1.0	0.0	true
+843	Y sensor press deviation	AD	1.0	0.0	true
 852	VTe high	AD	1.0	0.0	true
 853	VTe low	AD	1.0	0.0	true
 995	Any low prio alarm	AD	1.0	0.0	true
