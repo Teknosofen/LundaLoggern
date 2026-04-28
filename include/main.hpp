@@ -21,8 +21,9 @@
 #define TFT_REDDISH_TINT         0xA4B2   
 #define TFT_GREENISH_TINT        0x5DAD
 
-#define lundaLoggerVerLbl "LundaLogger 2026-04-24 1.2.0"
-#define VERSION "1.1"
+// --- Version (update both when bumping) ---
+#define VERSION           "1.2.1"                              // Short: shown on TFT main screen
+#define lundaLoggerVerLbl "LundaLogger 2026-04-28 " VERSION    // Long: boot screen & web dashboard
 
 #define hostCom Serial
 #define servoCom Serial2
