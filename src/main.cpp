@@ -53,7 +53,10 @@ Button interactionKey1(INTERACTION_BUTTON_PIN);  // GPIO14 Key 2
 void setup() {
   hostCom.begin(115200); // Initialize hostCom for debugging
   // delay(5000); // Wait for Serial to initialize
- 
+
+  hostCli.attach(&sd, &servoCIEData);
+  hostCli.begin();
+
   // ensure that the servoCOM used the appripriate parity!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   hostCom.println("LundaLogger setup started");
 
@@ -237,7 +240,9 @@ void loop() {
   }
 
   myWiFiServer.handleClient();                  // This keeps the web server alive
-  
+
+  hostCli.update();                             // Service USB-CDC commands
+
   interactionKey1.update();
   // if (interactionKey1.wasPressed()) {
   //   hostCom.println("interactionKey1 pressed");

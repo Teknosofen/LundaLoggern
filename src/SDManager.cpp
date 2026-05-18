@@ -1,4 +1,5 @@
 #include "SDManager.hpp"
+#include "HostCli.hpp"
 #include <SD.h>
 
 
@@ -233,35 +234,41 @@ bool SDManager::updateFileNameIfChanged(char dataType, String &outFileName) {
     generatedName = "/" + generatedName;
     outFileName = generatedName;
 
-    return (generatedName != currentFileName);
+    // Return true when this specific file does not yet exist (or is empty),
+    // i.e. when a header should be written. Comparing to a shared
+    // currentFileName would falsely report "new" every time the data type
+    // alternates between metrics, settings and alarms.
+    if (!SD.exists(generatedName.c_str())) {
+        return true;
+    }
+    File probe = SD.open(generatedName, FILE_READ);
+    bool empty = false;
+    if (probe) {
+        empty = (probe.size() == 0);
+        probe.close();
+    }
+    return empty;
 }
 
 
 void SDManager::appendData(String data, char dataType) {
     String newFileName;
-    bool isNewFile = updateFileNameIfChanged(dataType, newFileName);
-
-    if (isNewFile) {
-        currentFileName = newFileName;
-    }
+    updateFileNameIfChanged(dataType, newFileName);
+    currentFileName = newFileName;
 
     File file = SD.open(currentFileName, FILE_APPEND);
     if (!file) {
         Serial.println("Failed to open file for appending");
-        hostCom.println(currentFileName);
+        hostCli.dbg(String("appendData OPEN-FAIL type='") + dataType +
+                    "' file=" + currentFileName);
         return;
     }
 
-    // if (isNewFile) {
-    //     if (dataType == 'M') {
-    //         file.println("Timestamp,Temperature,Humidity,Pressure,Battery");
-    //     } else if (dataType == 'S') {
-    //         file.println("Timestamp,Setting1,Setting2,Setting3"); // placeholder
-    //     }
-    // }
-
-    file.print(data);
+    size_t written = file.print(data);
     file.close();
+    hostCli.dbg(String("appendData type='") + dataType +
+                "' file=" + currentFileName +
+                " bytes=" + String(written));
 }
 
 void SDManager::deleteAllFiles(const char* path) {

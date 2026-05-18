@@ -49,7 +49,7 @@ void ServoCIEData::handleAwaitingInfo(uint8_t NextSCI_chr) {
         case 'S':  RunMode = Settings_Data; settingsNo = 0; ByteCount = 2; break;
         case 'B':  RunMode = Breath_Data;   MetricNo = 0;  ByteCount = 2; break;
         case 'T':  RunMode = Trend_Data;                                break;
-        case 'A':  RunMode = Alarm_Data;                                break;
+        case 'A':  RunMode = Alarm_Data;                                hostCli.dbg("Alarm 'A' frame start"); break;
         case 0xE0: RunMode = Error_Data;    ByteCount = 1;               break;
         case 0x80: RunMode = Value_Data;    ByteCount = 2;               break;
         case 0x81: RunMode = Phase_Data;    ByteCount = 1;               break;
@@ -73,12 +73,12 @@ void ServoCIEData::handleBreathData(uint8_t NextSCI_chr) {
             dataStr = "Data from: " + getServoID() + "\n";
             dataStr += "Timestamp\t" + getLabelsAsString(metrics, MetricNo) + "\n";
             sdManager->appendData(dataStr, 'M');
-            hostCom.print(dataStr);
+            hostCli.emitMetric(dataStr);
         }
         dataStr = dateTime.getRTC().toString() + "\t" + getScaledValuesAsString(metrics, MetricNo);
         sdManager->appendData(dataStr, 'M');
         setLastMessageTime(millis());
-        hostCom.print(dataStr);
+        hostCli.emitMetric(dataStr);
         RunMode = End_Flag_Found;
     } else {
         MetricNo++;
@@ -102,12 +102,12 @@ void ServoCIEData::handleSettingsData(uint8_t NextSCI_chr) {
             dataStr = "Data from: " + getServoID() + "\n";
             dataStr += "Timestamp\t" + getLabelsAsString(settings, settingsNo) + "\n";
             sdManager->appendData(dataStr, 'S');
-            hostCom.print(dataStr);
+            hostCli.emitSetting(dataStr);
         }
         dataStr = dateTime.getRTC().toString() + "\t" + getScaledValuesAsString(settings, settingsNo, true);
         sdManager->appendData(dataStr, 'S');
         setLastMessageTime(millis());
-        hostCom.print(dataStr);
+        hostCli.emitSetting(dataStr);
         RunMode = End_Flag_Found;
     } else {
         settingsNo++;
@@ -120,46 +120,49 @@ void ServoCIEData::handleValueData(uint8_t NextSCI_chr) {
     switch (CurveCounter) {
         case 0:
         
-            if (ByteCount == 2) { hostCom.print("C0:\t"); cieCurve1 = 256 * NextSCI_chr; --ByteCount; }
+            if (ByteCount == 2) { /* hostCom.print("C0:\t"); */ cieCurve1 = 256 * NextSCI_chr; --ByteCount; }
             else if (ByteCount == 1) {
                 cieCurve1 += NextSCI_chr;
                 curves[CurveCounter].unscaled = cieCurve1;
-                hostCom.printf("%d\t", cieCurve1);
+                // hostCom.printf("%d\t", cieCurve1);
                 curves[CurveCounter].scaled = cieCurve1 * curves[0].scaleFactor - curves[0].offset;
-                hostCom.printf("%.2f\t", curves[CurveCounter].scaled);
+                // hostCom.printf("%.2f\t", curves[CurveCounter].scaled);
                 RunMode = Run_Mode;
                 --ByteCount;
                 CurveCounter = (curveCount > 1) ? 1 : 0;
+                if (CurveCounter == 0) hostCli.emitCurveSample();
             }
             break;
 
         case 1:
             
-            if (ByteCount == 2) { hostCom.print("C1:\t"); cieCurve2 = 256 * NextSCI_chr; --ByteCount; }
+            if (ByteCount == 2) { /* hostCom.print("C1:\t"); */ cieCurve2 = 256 * NextSCI_chr; --ByteCount; }
             else if (ByteCount == 1) {
                 cieCurve2 += NextSCI_chr;
                 curves[CurveCounter].unscaled = cieCurve2;
-                hostCom.printf("%d\t", cieCurve2);
+                // hostCom.printf("%d\t", cieCurve2);
                 curves[CurveCounter].scaled = cieCurve2 * curves[1].scaleFactor - curves[1].offset;
-                hostCom.printf("%.2f\t", curves[CurveCounter].scaled);
+                // hostCom.printf("%.2f\t", curves[CurveCounter].scaled);
                 RunMode = Run_Mode;
                 --ByteCount;
                 CurveCounter = (curveCount > 2) ? 2 : 0;
+                if (CurveCounter == 0) hostCli.emitCurveSample();
             }
             break;
 
         case 2:
             
-            if (ByteCount == 2) { hostCom.print("C2:\t"); cieCurve3 = 256 * NextSCI_chr; --ByteCount; }
+            if (ByteCount == 2) { /* hostCom.print("C2:\t"); */ cieCurve3 = 256 * NextSCI_chr; --ByteCount; }
             else if (ByteCount == 1) {
                 cieCurve3 += NextSCI_chr;
                 curves[CurveCounter].unscaled = cieCurve3;
-                hostCom.printf("%d\t", cieCurve3);
+                // hostCom.printf("%d\t", cieCurve3);
                 curves[CurveCounter].scaled = cieCurve3 * curves[2].scaleFactor - curves[2].offset;
-                hostCom.printf("%.2f\n", curves[CurveCounter].scaled);
+                // hostCom.printf("%.2f\n", curves[CurveCounter].scaled);
                 RunMode = Run_Mode;
                 --ByteCount;
                 CurveCounter = (curveCount > 3) ? 3 : 0;
+                if (CurveCounter == 0) hostCli.emitCurveSample();
             }
             setLastMessageTime(millis());
             break;
@@ -173,6 +176,7 @@ void ServoCIEData::handleValueData(uint8_t NextSCI_chr) {
                 RunMode = Run_Mode;
                 --ByteCount;
                 CurveCounter = 0;
+                hostCli.emitCurveSample();
             }
             break;
 
@@ -201,12 +205,12 @@ void ServoCIEData::handleAlarmData(uint8_t NextSCI_chr) {
             dataStr = "Data from: " + getServoID() + "\n";
             dataStr += "Timestamp\t" + getAlarmLabelsAsString();
             sdManager->appendData(dataStr, 'A');
-            hostCom.print(dataStr);
+            hostCli.emitAlarm(dataStr);
         }
         dataStr = dateTime.getRTC().toString() + "\t" + getAlarmValuesAsString();
         sdManager->appendData(dataStr, 'A');
         setLastMessageTime(millis());
-        hostCom.print(dataStr);
+        hostCli.emitAlarm(dataStr);
 
         alarmNo = 0;
         alarmPrioReceived = false;
@@ -520,6 +524,8 @@ bool ServoCIEData::CIE_setup() {
     strcpy(CMD_RTIM,  "RTIM");
     strcpy(CMD_RCTY,  "RCTY");
     strcpy(CMD_RSEN,  "RSEN");
+    strcpy(CMD_RHVE,  "RHVE");
+    strcpy(CMD_SPVE,  "SPVE");  // protocol version appended after RHVE response
     strcpy(CMD_SDADB, "SDADB");     // strcpy(PAYLOAD_SDADB, "113114117100102101103104109108107122105106128");
     strcat(CMD_SDADB, concatConfigChannels(metrics, metricCount).c_str());  // Append PAYLOAD_SDADB to CMD_SDADB
     strcpy(CMD_SDADS, "SDADS"); // strcpy(PAYLOAD_SDADS, "400405408414406420410409437419");
@@ -563,6 +569,31 @@ bool ServoCIEData::CIE_setup() {
     String rsenResponse = getCIEResponse();
     parseRSENResponse(rsenResponse.c_str(),rsenResponse.length() );
 
+    // Read highest supported SCI protocol version from the ventilator and
+    // switch to it. Without SPVE the ventilator stays on protocol 0001 and
+    // rejects channels introduced later (e.g. ER1214 on SDADA).
+    Send_SERVO_CMD_ASCII(CMD_RHVE);
+    String rhveResponse = getCIEResponse();
+    hostCom.print("[DBG] RHVE response: "); hostCom.println(rhveResponse);
+    // Extract first 4 ASCII digits as the highest version code
+    char ver[5] = {0};
+    int vi = 0;
+    for (size_t k = 0; k < rhveResponse.length() && vi < 4; ++k) {
+        char c = rhveResponse[k];
+        if (c >= '0' && c <= '9') ver[vi++] = c;
+    }
+    if (vi == 4) {
+        char spveCmd[16];
+        strcpy(spveCmd, CMD_SPVE);   // "SPVE"
+        strcat(spveCmd, ver);        // -> "SPVE0004"
+        hostCom.print("[DBG] Sending SPVE: "); hostCom.println(spveCmd);
+        Send_SERVO_CMD_ASCII(spveCmd);
+        String spveResponse = getCIEResponse();
+        hostCom.print("[DBG] SPVE response: "); hostCom.println(spveResponse);
+    } else {
+        hostCom.println("[DBG] RHVE did not return a 4-digit version, skipping SPVE");
+    }
+
     // breath to breats / Metrics channels
     Send_SERVO_CMD_ASCII(CMD_SDADB);
     getCIEResponse();
@@ -572,8 +603,12 @@ bool ServoCIEData::CIE_setup() {
     getCIEResponse();
 
     // Alarm channels
+    hostCom.print("[DBG] Sending SDADA: "); hostCom.println(CMD_SDADA);
     Send_SERVO_CMD_ASCII(CMD_SDADA);
-    getCIEResponse();
+    {
+        String r = getCIEResponse();
+        hostCom.print("[DBG] SDADA response: "); hostCom.println(r);
+    }
 
     // Curve channels
     Send_SERVO_CMD_ASCII(CMD_SDADC);
@@ -728,12 +763,16 @@ bool ServoCIEData::loadConfigFromSD(const char* path, Configs* configs, int& con
         if (line.length() == 0 || line.startsWith("#")) continue;
 
         Configs m;
-        if (parseConfigLine(line, m) && configCount < MaxMetrics) {
+        if (parseConfigLine(line, m) && configCount < maxConfigs) {
             configs[configCount++] = m;
         }
     }
 
     file.close();
+    if (configCount == 0) {
+        hostCom.println("⚠ SD " + String(path) + " had no valid entries");
+        return false;
+    }
     return true;
 }
 
@@ -746,19 +785,23 @@ bool ServoCIEData::loadConfigFromSPIFFS(const char* path, Configs* configs, int&
         return false;
     }
 
-    hostCom.println("? Loaded " + String(path) + " config from SPIFFS");
+    hostCom.println("✅ Loaded " + String(path) + " config from SPIFFS");
     while (file.available()) {
         String line = file.readStringUntil('\n');
         line.trim();
         if (line.length() == 0 || line.startsWith("#")) continue;
 
         Configs m;
-        if (parseConfigLine(line, m) && configCount < MaxMetrics) {
+        if (parseConfigLine(line, m) && configCount < maxConfigs) {
             configs[configCount++] = m;
         }
     }
 
     file.close();
+    if (configCount == 0) {
+        hostCom.println("⚠ SPIFFS " + String(path) + " had no valid entries");
+        return false;
+    }
     return true;
 }
 

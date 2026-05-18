@@ -169,6 +169,8 @@ private:
     char CMD_RTIM[8];
     char CMD_RCTY[8];
     char CMD_RSEN[8];
+    char CMD_RHVE[8];
+    char CMD_SPVE[16];
     char CMD_SDADB[64];
     char PAYLOAD_SDADB[64];
     char PAYLOAD_SDADS[64];

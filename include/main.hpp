@@ -22,8 +22,8 @@
 #define TFT_GREENISH_TINT        0x5DAD
 
 // --- Version (update both when bumping) ---
-#define VERSION           "1.2.1"                              // Short: shown on TFT main screen
-#define lundaLoggerVerLbl "LundaLogger 2026-04-28 " VERSION    // Long: boot screen & web dashboard
+#define VERSION           "1.3.0"                              // Short: shown on TFT main screen
+#define lundaLoggerVerLbl "LundaLogger 2026-05-18 " VERSION    // Long: boot screen & web dashboard
 
 #define hostCom Serial
 #define servoCom Serial2
@@ -69,5 +69,6 @@ const unsigned long INIT_INTERVAL_MS = 5000; // Retry INIT every 5 seconds
 // const char* MetricConfigPath = "/MetricConfig.txt";
 // const char* SettingConfigPath = "/SettingConfig.txt";
 #include "Button.hpp"
+#include "HostCli.hpp"
 
 #endif // MAIN_HPP

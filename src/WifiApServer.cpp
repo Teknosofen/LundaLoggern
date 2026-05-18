@@ -255,6 +255,10 @@ void WifiApServer::handleConfigViewer() {
         return content;
     };
 
+    // --- DeviceConfig.txt ---
+    html += "<h3>DeviceConfig.txt</h3>";
+    html += "<pre>" + readFileContent("/DeviceConfig.txt") + "</pre>";
+
     // --- MetricConfig.txt ---
     html += "<h3>MetricConfig.txt</h3>";
     html += "<pre>" + readFileContent("/MetricConfig.txt") + "</pre>";
@@ -262,6 +266,10 @@ void WifiApServer::handleConfigViewer() {
     // --- SettingConfig.txt ---
     html += "<h3>SettingConfig.txt</h3>";
     html += "<pre>" + readFileContent("/SettingConfig.txt") + "</pre>";
+
+    // --- CurveConfig.txt ---
+    html += "<h3>CurveConfig.txt</h3>";
+    html += "<pre>" + readFileContent("/CurveConfig.txt") + "</pre>";
 
     // --- AlarmConfig.txt ---
     html += "<h3>AlarmConfig.txt</h3>";

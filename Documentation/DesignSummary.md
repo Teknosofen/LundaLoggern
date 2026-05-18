@@ -149,6 +149,70 @@ A key-value configuration file for parameters that govern the device itself (as 
 
 **SD card → SPIFFS**. Bi-directional sync between SD and SPIFFS ensures resilience. If a configuration file is not found on the SD card (e.g., a fresh/empty card is inserted), the last known valid copy stored in SPIFFS is written to the SD card as a template. The operator can then edit it on the SD card and the changes will be picked up on next boot.
 
+A load attempt is treated as successful only if at least one valid entry is parsed. An SD file that exists but is empty or contains no parseable lines is rejected, and the SPIFFS copy is used instead (and re-synced to SD). This prevents an accidentally truncated SD file from overwriting the SPIFFS factory defaults.
+
+---
+
+## 4a. Log File Formats
+
+All log files are written to the SD card root as plain UTF-8 text with **tab-separated** fields and Unix-style newlines (`\n`). File names use the pattern `<type>_<YYYYMMDD>_<HHMM>.txt`, where the `HHMM` part is the start of the **12-hour rolling window** (`0000` or `1200` local time). When the window changes, a new file is created and the next write begins it with the header.
+
+Header detection: a file is considered "new" (header is written) when it does not yet exist on the SD card or has size 0. Detection is per-file, so interleaved metric, setting and alarm writes never trigger spurious re-headers.
+
+### `metrics_YYYYMMDD_HHMM.txt`
+
+Breath-by-breath measurements (from SCI `B` frames).
+
+```
+Data from: <ServoID>
+Timestamp	<label1>	<label2>	...	<labelN>
+2026-04-28 13:05:19	12.0	No Valid Data	7.6	...
+2026-04-28 13:05:24	12.0	No Valid Data	7.6	...
+```
+
+- One row per received breath frame.
+- Values are **scaled** floating-point (`scale*raw - offset`) per `MetricConfig.txt`.
+- Channels marked invalid by the ventilator (raw `0x7EFF`) appear as `No Valid Data`.
+
+### `settings_YYYYMMDD_HHMM.txt`
+
+Ventilator setting values (from SCI `S` frames). Same row format as metrics, using the channels and scaling defined in `SettingConfig.txt`.
+
+### `alarms_YYYYMMDD_HHMM.txt`
+
+Alarm-state snapshots, written **only when at least one subscribed alarm transitions** (becomes active, silenced, or clears). The SCI alarm stream is change-driven, so a quiet ventilator produces no rows.
+
+```
+Data from: <ServoID>
+Timestamp	<label1>	<label2>	...	<labelN>
+2026-04-28 13:42:11	0:0	0:0	3:1	0:0	N/A	2:2	0:0	...
+```
+
+Per-channel field is either `prio:status` or the literal `N/A`:
+
+| Field | Code | Meaning |
+|---|---|---|
+| `prio` (priority) | `0` | undefined |
+| | `1` | low |
+| | `2` | medium |
+| | `3` | high |
+| `status` | `0` | no alarm |
+| | `1` | alarm active |
+| | `2` | alarm active but silenced |
+| `N/A` | — | channel does not apply in current ventilation mode (raw `0x7EFF`) |
+
+Example: `3:1` = high-priority active; `2:2` = medium-priority silenced; `0:0` = clear; `N/A` = not applicable.
+
+The label order in the header matches the channel order in `AlarmConfig.txt`. To translate a row into named events, line up each tab-separated value with the corresponding header label.
+
+### `curves_YYYYMMDD_HHMM.txt`
+
+Reserved for waveform data (Flow / Press / Volume / Edi / FCO2). Curve data is currently parsed and stored in memory but not written to SD in the present firmware revision; the file name pattern is provided for forward-compatibility.
+
+### `log.txt`
+
+Free-form diagnostic log used during board bring-up. Not part of the regular data stream and may be removed at any time.
+
 ---
 
 ## 5. Communication Protocol
@@ -171,7 +235,7 @@ The device communicates with SERVO ventilators using the **CIE (Computer Interfa
 - **Web pages**:
   - **Home / Dashboard**: Displays version, device ID, status labels, and logo.
   - **File Manager**: Lists all SD card log files with download and delete actions.
-  - **Config Viewer**: Shows currently loaded metric, setting, curve, and alarm configurations.
+  - **Config Viewer**: Shows the currently loaded configuration files from SPIFFS: `DeviceConfig.txt`, `MetricConfig.txt`, `SettingConfig.txt`, `CurveConfig.txt`, and `AlarmConfig.txt`.
 - **QR Code**: Display can show a QR code for quick WiFi connection from a phone.
 
 ---
