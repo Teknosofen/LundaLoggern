@@ -27,10 +27,12 @@ public:
     WifiApServer(String ssid, String password);
 
     /// Start the access point, register the routes and start the HTTP server.
-    /// Call enableSdFileDownloads()/enableSdFileDelete() before this.
-    /// Note: main.cpp calls this on every long press, which registers the
-    /// routes again each time.
+    /// Call enableSdFileDownloads()/enableSdFileDelete() before the first call.
+    /// May be called again after end(); the routes are only registered once.
     void begin();
+
+    /// Stop the HTTP server and the access point, and switch the WiFi radio off.
+    void end();
 
     /// Serve pending HTTP requests. Call from loop() on every pass.
     void handleClient();
@@ -44,7 +46,8 @@ public:
     /// Set one of the four dashboard list lines (index 0..3). Out-of-range indexes are ignored.
     void setLabel(int index, String label);
 
-    /// Enable the /download and /delete routes. Only takes effect on the next begin().
+    /// Enable the /download and /delete routes. Only takes effect if called
+    /// before the first begin(), when the routes are registered.
     void enableSdFileDownloads(bool enable = true);
     void enableSdFileDelete(bool enable = true);
 
@@ -64,6 +67,7 @@ private:
     float _values[4];
     String _labels[4];                // dashboard list lines
     bool _downloadEnabled, _deleteEnabled;
+    bool _routesRegistered = false;   // set by the first begin()
 
     void setupWebServer();
     /// HTTP basic auth check. If it fails, a login request has already been sent.

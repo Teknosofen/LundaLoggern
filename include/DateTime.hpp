@@ -53,7 +53,7 @@ public:
     static void setRTC(const DateTime& dt);
     /// Load this object from the system clock; invalid if the clock was never set.
     void readRTC();
-    /// Current system clock as a DateTime. See readRTC() for the blocking caveat.
+    /// Current system clock as a DateTime (non-blocking); invalid if never set.
     static DateTime getRTC();
 
 private:

@@ -107,6 +107,7 @@ classDiagram
     }
     class WifiApServer {
         +begin()
+        +end()
         +handleClient()
         +setText(text)
         +setLabel(index, label)
@@ -171,7 +172,7 @@ classDiagram
 | **`ServoCIEData`** | `begin()`, `parseCIEData(byte)`, `CIE_comCheck()`, and `CIE_setup()` manage CIE startup and byte-wise parsing. `initializeConfigs(...)` loads channel definitions. Getters expose device ID, breath phase, communication state, and alarm summaries. | Constructed with an `SDManager*`; writes metric, setting, and alarm rows through it. Uses `DateTime`/RTC for ventilator time. Channel configuration arrays are currently public. |
 | **`SDManager`** | `begin()` mounts the card; `updateCardStatus()` reports presence transitions; `appendData(data, type)` routes a data row to its rolling log; text-file methods provide basic file operations. Busy/card state is queryable. | Constructed with an SPI bus, chip-select pin, and `DateTime*`. Owns the SD logging and file-name window logic. |
 | **`HostCli`** | `attach(sd, cie)`, `begin()`, then non-blocking `update()` form the lifecycle. `emitSetting/Metric/Alarm/CurveSample()` mirror data only when the corresponding stream is enabled; `info()` and `dbg()` provide tagged output. | Receives `SDManager` and `ServoCIEData` pointers through `attach()`. Its command parser controls streams and provides status, headers, file listing/dump, and marker commands. |
-| **`WifiApServer`** | `begin()` starts the AP/server; `handleClient()` services HTTP requests. Setters update dashboard text/values/labels; feature toggles control SD download and delete actions; `getApIpAddress()` reports the AP address. | Constructed with SSID and password. Its HTTP server provides dashboard, file-manager, and configuration-viewer routes. |
+| **`WifiApServer`** | `begin()` starts the AP/server (routes are registered once, so repeated calls are safe); `end()` stops the server and switches the radio off; `handleClient()` services HTTP requests. Setters update dashboard text/values/labels; feature toggles control SD download and delete actions; `getApIpAddress()` reports the AP address. | Constructed with SSID and password. Its HTTP server provides dashboard, file-manager, and configuration-viewer routes. |
 | **`ImageRenderer`** | `begin()` initializes the display; drawing methods update screen regions, device/time labels, SD/COM indicators, breath phase, and WiFi status. | Constructed with a `TFT_eSPI&`; `main.cpp` decides when status changes warrant a redraw. |
 | **`DateTime`** | Value object with field accessors/mutators, validity, `toString()`/`rawString()`, and RTC read/write helpers. | Shared timestamp source for log naming and display. The CIE time response is parsed by `ServoCIEData`. |
 | **`Button`** | `begin()` configures input; `handleInterrupt()` records edge events; `update()` advances press/debounce state; `wasPressed()`, `wasReleased()`, and `wasLongPress()` expose events to the caller. | `main.cpp` maps a long press to WiFi startup and a short press to WiFi shutdown. |
@@ -244,7 +245,7 @@ Configuration is stored as tab-separated text files, loaded from the SD card (wi
 Same column format as metrics, using channel numbers in the 400-range (e.g., RR, MV, PEEP, FiO2, mode).
 
 ### CurveConfig.txt — High-frequency waveform channels
-Adds an `active` flag (true/false) to enable/disable individual curve channels (Flow, Pressure, Volume, Edi, FCO2).
+Adds an `active` flag (true/false) to enable/disable individual curve channels (Flow, Pressure, Volume, Edi, FCO2). The active channels, in file order, are what the logger subscribes to with `SDADC` (up to 5). At least one channel must be active: the ventilator refuses to start streaming (`RADC`) without a curve channel.
 
 ### AlarmConfig.txt — Ventilator alarm channels
 Defines which SCI alarm channels (800–999) to subscribe to and log. Same tab-separated format as metrics/settings.
@@ -307,7 +308,7 @@ Timestamp	<label1>	<label2>	...	<labelN>
 
 ### `settings_YYYYMMDD_HHMM.txt`
 
-Ventilator setting values (from SCI `S` frames). Same row format as metrics, using the channels and scaling defined in `SettingConfig.txt`.
+Ventilator setting values (from SCI `S` frames, sent when a setting changes). Same header and row format as metrics (one row per frame: `<timestamp>\t<v1>\t<v2>…`), using the channels and scaling defined in `SettingConfig.txt`.
 
 ### `alarms_YYYYMMDD_HHMM.txt`
 
@@ -352,8 +353,9 @@ The device communicates with SERVO ventilators using the **CIE (Computer Interfa
 
 - **Physical layer**: RS232, 38 400 baud, 8 data bits, even parity, 1 stop bit (8E1)
 - **Initialization**: Sends `RTIM` (request time), `RCTY` (request device type), `RSEN` (request serial number) commands to identify the ventilator.
-- **Data subscription**: Sends `SDADB` / `SDADS` / `SDADA` / `SDADC` commands to subscribe to breath data, settings, alarm, and curve channels respectively.
-- **Framing**: Uses `EOT` (0x04) and `ESC` (0x1B) as delimiters; CRC-8 for integrity.
+- **Data subscription**: Sends `SDADB` / `SDADS` / `SDADA` / `SDADC` commands to subscribe to breath data, settings, alarm, and curve channels respectively. Each payload is the list of active channels from the matching config file, in file order.
+- **Framing**: ASCII commands end with a 2-digit hex XOR checksum and `EOT` (0x04); `ESC` (0x1B) stops any ongoing transmission. Binary stream frames end with `0x7F` plus a checksum byte.
+- **Curve samples**: Sent either as absolute 16-bit values (`0x80 <hi> <lo>`) or as one-byte signed differences (`0x82`–`0x7E`, −126…+126) from the previous sample of the same channel. The parser decodes both.
 - **Timeout handling**: If no data is received for 8 seconds, the connection is marked lost and re-initialization is attempted every 5 seconds.
 
 ---
@@ -436,7 +438,7 @@ CURVE	Timestamp	<label0>	<label1>	…
 CURVE	2026-05-18 14:03:11.42	12.7	-3.1	0.05	…
 ```
 
-Labels and channel count come from `CurveConfig.txt`. Values are the scaled floats from `curves[i].scaled`, formatted with 2 decimal places. One `CURVE` row is emitted per **complete sample set** (i.e. once all `curveCount` channels have been refreshed), subject to the `RATE C <n>` decimation factor.
+Labels and channel count come from `CurveConfig.txt`. Values are the scaled floats from `curves[i].scaled`, formatted with 2 decimal places. One `CURVE` row is emitted per **complete sample set** (i.e. once all `curveCount` channels have been refreshed), subject to the `RATE C <n>` decimation factor. Both absolute samples and the ventilator's one-byte delta samples are decoded, so the rows follow the ventilator's curve sampling rate.
 
 > **Bandwidth caution.** At native rate the SERVO curve channel produces tens of samples per second across multiple channels. The USB-CDC link can carry this, but: (1) it can saturate slow terminal programs, and (2) printing curves while also running `STREAM ON M S A` and `DEBUG ON` will interleave a lot of text. Use `RATE C n` to thin the stream, or only enable curves for short captures.
 
@@ -621,13 +623,13 @@ LundaLoggern/
 ├── include/                    # Header files
 │   ├── main.hpp                # Global includes, pin defs, constants
 │   ├── ServoCIEData.hpp        # CIE protocol & data management
-│   ├── SDmanager.hpp           # SD card abstraction
+│   ├── SDManager.hpp           # SD card abstraction
 │   ├── WifiApServer.hpp        # WiFi AP & HTTP server
 │   ├── HostCli.hpp             # USB-CDC command / stream interface
 │   ├── ImageRenderer.hpp       # TFT display rendering
 │   ├── DateTime.hpp            # Date/time object & RTC
 │   ├── Button.hpp              # Button input handler
-│   ├── QRHAndler.hpp           # QR code display
+│   ├── QRHandler.hpp           # QR code display
 │   ├── constants.h             # Display position constants
 │   └── ...                     # Fonts, logo bitmap
 ├── src/                        # Implementation files
@@ -650,7 +652,7 @@ LundaLoggern/
 1. **SD + SPIFFS dual storage**: Configurations live in both locations for resilience. SPIFFS holds factory defaults; SD card holds user overrides.
 2. **Character-by-character CIE parsing**: A state machine processes each incoming byte, allowing the main loop to remain non-blocking.
 3. **Button-controlled WiFi**: WiFi and the web server are off by default to minimise power consumption and RF interference in clinical environments. The operator must explicitly activate them via a long-press of the interaction button, and can shut them down again with a short-press.
-4. **Ventilator-derived time**: No RTC module is needed; the device obtains accurate timestamps from the connected ventilator.
+4. **Ventilator-derived time**: No RTC module is needed; the device obtains accurate timestamps from the connected ventilator. Until a ventilator has set the clock, timestamps read as invalid (the clock read never blocks).
 5. **Configurable channels**: Which metrics, settings, curves, and alarms to log are fully configurable via text files, enabling adaptation to different clinical needs without recompilation.
 6. **Alarm logging**: Alarm data is parsed from the SCI `RADC` continuous data stream (flag byte `0x41` / `'A'`), which transmits priority/status byte pairs whenever any subscribed alarm state changes. Up to 100 alarm channels can be subscribed via the `SDADA` command. Alarms are logged to separate `alarms_YYYYMMDD_HHMM.txt` files with the same 12-hour rolling window as metrics and settings.
 
@@ -664,11 +666,10 @@ LundaLoggern/
 
 #### Existing behaviour (reference)
 
-The WiFi AP and web server are **off by default**. The operator starts them with a long-press on the interaction button. The shutdown path already exists in [main.cpp](../src/main.cpp) (short-press handler):
+The WiFi AP and web server are **off by default**. The operator starts them with a long-press on the interaction button. The shutdown path already exists as `WifiApServer::end()`, called from the short-press handler in [main.cpp](../src/main.cpp):
 
 ```cpp
-WiFi.softAPdisconnect(true);
-WiFi.mode(WIFI_OFF);
+myWiFiServer.end();   // stops the HTTP server and the AP, radio off
 renderer.drawWiFiAPIP("WiFi OFF      ", "No SSID        ");
 renderer.drawWiFiPromt("Press key to enable");
 ```

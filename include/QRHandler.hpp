@@ -6,9 +6,6 @@
 //  Implemented but NOT used: nothing in main.cpp creates a QRHandler.
 //  Before wiring it in, note that it owns a second TFT_eSPI instance; it
 //  should rather draw through the global `tft`/ImageRenderer.
-//
-//  The file name is spelled QRHAndler.hpp but included as "QRHandler.hpp",
-//  which only works on a case-insensitive file system (Windows).
 // =============================================================================
 
 #include <TFT_eSPI.h>

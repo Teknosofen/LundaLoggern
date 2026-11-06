@@ -131,7 +131,7 @@ void ServoCIEData::handleBreathData(uint8_t NextSCI_chr) {
         bool isNewFile = sdManager->updateFileNameIfChanged('M', newFilename);
         if (isNewFile) {
             dataStr = "Data from: " + getServoID() + "\n";
-            dataStr += "Timestamp\t" + getLabelsAsString(metrics, receivedCount) + "\n";
+            dataStr += "Timestamp\t" + getLabelsAsString(metrics, receivedCount);   // ends with '\n'
             sdManager->appendData(dataStr, 'M');
             hostCli.emitMetric(dataStr);
         }
@@ -176,13 +176,13 @@ void ServoCIEData::handleSettingsData(uint8_t NextSCI_chr) {
         bool isNewFile = sdManager->updateFileNameIfChanged('S', newFilename);
         if (isNewFile) {
             dataStr = "Data from: " + getServoID() + "\n";
-            dataStr += "Timestamp\t" + getLabelsAsString(settings, receivedCount) + "\n";
+            dataStr += "Timestamp\t" + getLabelsAsString(settings, receivedCount);  // ends with '\n'
             sdManager->appendData(dataStr, 'S');
             hostCli.emitSetting(dataStr);
         }
-        // NOTE: includeHeader = true, so each settings record is written as two
-        // lines: "<timestamp>\t<label0>\t<label1>..." then "<v0>\t<v1>...".
-        dataStr = dateTime.getRTC().toString() + "\t" + getScaledValuesAsString(settings, receivedCount, true);
+        // One row per settings frame, same layout as the metrics log:
+        // "<timestamp>\t<v0>\t<v1>..."; the labels are in the file header.
+        dataStr = dateTime.getRTC().toString() + "\t" + getScaledValuesAsString(settings, receivedCount);
         sdManager->appendData(dataStr, 'S');
         setLastMessageTime(millis());
         hostCli.emitSetting(dataStr);
@@ -198,75 +198,42 @@ void ServoCIEData::handleSettingsData(uint8_t NextSCI_chr) {
     }
 }
 
-// Curve sample after a 0x80 value flag: <hi><lo>.
-// Samples arrive round-robin over the subscribed curve channels, so the
-// sample is stored in slot CurveCounter, which then advances to the next slot.
-// When the last configured slot (curveCount) has been filled, CurveCounter
-// wraps to 0 and the complete sample set is offered to HostCli (USB only;
-// curves are not logged to SD).
-//
-// Slots are matched to curves[] by POSITION: the channel order in the SDADC
-// subscription (see CIE_setup()) must match the order in CurveConfig.txt.
-// Only 4 slots are handled; slot 3 always wraps back to 0.
+// Absolute curve sample after a 0x80 value flag: <hi><lo>.
 void ServoCIEData::handleValueData(uint8_t NextSCI_chr) {
-    switch (CurveCounter) {
-        case 0:
+    if (ByteCount == 2) {
+        curveAccum = (uint16_t)NextSCI_chr << 8;
+        ByteCount = 1;
+    } else {
+        curveAccum |= NextSCI_chr;
+        ByteCount = 0;
+        RunMode = Run_Mode;
+        storeCurveSample(curveAccum);
+    }
+}
 
-            if (ByteCount == 2) { cieCurve1 = 256 * NextSCI_chr; --ByteCount; }
-            else if (ByteCount == 1) {
-                cieCurve1 += NextSCI_chr;
-                curves[CurveCounter].unscaled = cieCurve1;
-                curves[CurveCounter].scaled = cieCurve1 * curves[0].scaleFactor - curves[0].offset;
-                RunMode = Run_Mode;
-                --ByteCount;
-                CurveCounter = (curveCount > 1) ? 1 : 0;
-                if (CurveCounter == 0) hostCli.emitCurveSample();
-            }
-            break;
+// Store one curve sample in slot CurveCounter and advance to the next slot.
+// Samples arrive round-robin over the subscribed curve channels, and SDADC
+// subscribes exactly the channels of CurveConfig.txt in file order (see
+// CIE_setup()), so slot n is curves[n]. When the last slot has been filled,
+// CurveCounter wraps to 0 and the complete sample set is offered to HostCli
+// (USB only; curves are not logged to SD).
+// `valid` = false skips the slot without changing its value (a delta sample
+// arrived for a slot that has no absolute base value yet).
+void ServoCIEData::storeCurveSample(uint16_t raw, bool valid) {
+    if (curveCount <= 0) return;                 // no curves subscribed
+    if (CurveCounter >= (unsigned int)curveCount) CurveCounter = 0;
 
-        case 1:
+    Configs& c = curves[CurveCounter];
+    if (valid) {
+        c.unscaled = raw;
+        c.scaled   = raw * c.scaleFactor - c.offset;
+        curveHasBase[CurveCounter] = true;
+    }
 
-            if (ByteCount == 2) { cieCurve2 = 256 * NextSCI_chr; --ByteCount; }
-            else if (ByteCount == 1) {
-                cieCurve2 += NextSCI_chr;
-                curves[CurveCounter].unscaled = cieCurve2;
-                curves[CurveCounter].scaled = cieCurve2 * curves[1].scaleFactor - curves[1].offset;
-                RunMode = Run_Mode;
-                --ByteCount;
-                CurveCounter = (curveCount > 2) ? 2 : 0;
-                if (CurveCounter == 0) hostCli.emitCurveSample();
-            }
-            break;
-
-        case 2:
-
-            if (ByteCount == 2) { cieCurve3 = 256 * NextSCI_chr; --ByteCount; }
-            else if (ByteCount == 1) {
-                cieCurve3 += NextSCI_chr;
-                curves[CurveCounter].unscaled = cieCurve3;
-                curves[CurveCounter].scaled = cieCurve3 * curves[2].scaleFactor - curves[2].offset;
-                RunMode = Run_Mode;
-                --ByteCount;
-                CurveCounter = (curveCount > 3) ? 3 : 0;
-                if (CurveCounter == 0) hostCli.emitCurveSample();
-            }
-            setLastMessageTime(millis());   // note: only slot 2 refreshes the link timer
-            break;
-
-        case 3:
-            if (ByteCount == 2) { cieCurve4 = 256 * NextSCI_chr; --ByteCount; }
-            else if (ByteCount == 1) {
-                cieCurve4 += NextSCI_chr;
-                curves[CurveCounter].unscaled = cieCurve4;
-                curves[CurveCounter].scaled = cieCurve4 * curves[3].scaleFactor - curves[3].offset;
-                RunMode = Run_Mode;
-                --ByteCount;
-                CurveCounter = 0;
-                hostCli.emitCurveSample();
-            }
-            break;
-
-        default: break;
+    if (++CurveCounter >= (unsigned int)curveCount) {
+        CurveCounter = 0;
+        setLastMessageTime(millis());            // link is alive
+        hostCli.emitCurveSample();
     }
 }
 
@@ -357,16 +324,24 @@ void ServoCIEData::handleErrorData(uint8_t NextSCI_chr) {
     }
 }
 
-// Inside the curve stream, between samples. Any other byte is ignored. That
-// includes the SCI's one-byte delta-encoded samples (<diff_value>, 0x82..0x7E),
-// which this parser does not decode: only absolute samples (0x80 <hi><lo>)
-// update curves[].
+// Inside the curve stream, between samples. Apart from the three flags, every
+// byte is a one-byte delta sample <diff_value>: a signed 8-bit difference
+// (0x82..0x7E = -126..+126) from the previous sample of the same channel.
+// The ventilator sends an absolute sample (0x80 <hi><lo>) first and whenever
+// the difference is too large, including after every interruption.
 void ServoCIEData::handleRunMode(uint8_t NextSCI_chr) {
     switch (NextSCI_chr) {
         case ValueFlag: RunMode = Value_Data; ByteCount = 2; break;
         case PhaseFlag: RunMode = Phase_Data; ByteCount = 1; break;
         case EndFlag:   RunMode = End_Flag_Found;            break;
-        default:        break;
+        default: {
+            if (curveCount <= 0) break;
+            if (CurveCounter >= (unsigned int)curveCount) CurveCounter = 0;
+            int value = (int)curves[CurveCounter].unscaled + (int8_t)NextSCI_chr;
+            bool valid = curveHasBase[CurveCounter] && value >= 0 && value <= cieDataInvalid;
+            storeCurveSample((uint16_t)value, valid);
+            break;
+        }
     }
 }
 
@@ -650,10 +625,8 @@ unsigned long ServoCIEData::getLastMessageTime() const {
 bool ServoCIEData::CIE_setup() {
     // Build every command string up front, so a config with too many channels
     // is caught before anything is sent.
-    // SDADC payload: curve channels 000 (Flow), 004 (FCO2), 001 (Press), three
-    // digits each. These are hard-coded and NOT read from CurveConfig.txt;
-    // handleValueData() maps samples to curves[] by position, so CurveConfig.txt
-    // must list the same channels in the same order.
+    // Every SDAD* payload is the channel list of its config file, in file
+    // order, which is also the order of the values in the stream.
     // RCCO "102": read the gain/offset configuration of channel 102 (diagnostic).
     if (!buildCommand(CMD_RTIM, sizeof(CMD_RTIM), "RTIM", "") ||
         !buildCommand(CMD_RCTY, sizeof(CMD_RCTY), "RCTY", "") ||
@@ -663,8 +636,7 @@ bool ServoCIEData::CIE_setup() {
         !buildCommand(CMD_SDADB, sizeof(CMD_SDADB), "SDADB", concatConfigChannels(metrics, metricCount)) ||
         !buildCommand(CMD_SDADS, sizeof(CMD_SDADS), "SDADS", concatConfigChannels(settings, settingCount)) ||
         !buildCommand(CMD_SDADA, sizeof(CMD_SDADA), "SDADA", concatConfigChannels(alarms, alarmCount)) ||
-        !buildCommand(PAYLOAD_SDADC, sizeof(PAYLOAD_SDADC), "", "000004001") ||
-        !buildCommand(CMD_SDADC, sizeof(CMD_SDADC), "SDADC", PAYLOAD_SDADC) ||
+        !buildCommand(CMD_SDADC, sizeof(CMD_SDADC), "SDADC", concatConfigChannels(curves, curveCount)) ||
         !buildCommand(CMD_RCCO, sizeof(CMD_RCCO), "RCCO", "102") ||
         !buildCommand(CMD_RDAD, sizeof(CMD_RDAD), "RDAD", "") ||
         !buildCommand(CMD_RADAB, sizeof(CMD_RADAB), "RADAB", "") ||
@@ -746,9 +718,16 @@ bool ServoCIEData::CIE_setup() {
         hostCom.print("[DBG] SDADA response: "); hostCom.println(r);
     }
 
-    // Curve channels (hard-coded, see above):
+    // Curve channels. The SCI refuses RADC (error BER16) when no curve channel
+    // is subscribed, so CurveConfig.txt needs at least one active line.
+    if (curveCount <= 0) {
+        hostCom.println("⚠ No curve channels configured: RADC will be refused by the ventilator");
+    }
     Send_SERVO_CMD_ASCII(CMD_SDADC);
     getCIEResponse();
+    // The stream starts with absolute values for curve slot 0.
+    CurveCounter = 0;
+    for (int i = 0; i < MaxCurves; ++i) curveHasBase[i] = false;
 
     // Diagnostics only; the replies are echoed by getCIEResponse() and discarded.
     Send_SERVO_CMD_ASCII(CMD_RCCO);   // channel configuration of channel 102
@@ -786,11 +765,11 @@ bool ServoCIEData::CIE_setup() {
 // An SD file that exists but has no valid lines counts as missing, so a
 // truncated SD file never overwrites the good SPIFFS copy.
 void ServoCIEData::initializeConfigs(const char* metricPath, const char* settingPath, const char* curvePath, const char* alarmPath) {
-    // NOTE: these locals shadow the member flags of the same name, so the
-    // members stay false. The alarm flag below is the member.
-    bool metricConfigLoaded = false;
-    bool settingConfigLoaded = false;
-    bool curveConfigLoaded = false;
+    // The load flags are members, so other code can see what was loaded.
+    metricConfigLoaded = false;
+    settingConfigLoaded = false;
+    curveConfigLoaded = false;
+    alarmConfigLoaded = false;
 
     bool sdReady = sdManager && (sdManager->isCardPresent() || sdManager->begin());
     if (sdReady) {

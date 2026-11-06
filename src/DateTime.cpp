@@ -37,9 +37,10 @@ String DateTime::rawString() const {
 
 // --- System clock -----------------------------------------------------------
 
-// struct tm counts years from 1900 and months from 0.
+// struct tm counts years from 1900 and months from 0. Zero-initialised so
+// tm_isdst = 0 (no time zone is configured; the ventilator sends local time).
 void DateTime::setRTC() const {
-    struct tm timeinfo;
+    struct tm timeinfo = {};
     timeinfo.tm_year = _year - 1900;
     timeinfo.tm_mon  = _month - 1;
     timeinfo.tm_mday = _day;
@@ -51,13 +52,16 @@ void DateTime::setRTC() const {
     settimeofday(&now, nullptr);
 }
 
-// getLocalTime() (Arduino-ESP32) treats any year up to 2016 as "clock not
-// set" and keeps retrying for up to its default timeout of 5 s before it
-// gives up. So until the ventilator has provided the time, every call to
-// readRTC()/getRTC() blocks for about 5 s and returns an invalid DateTime.
+// Reads the system clock directly instead of using Arduino-ESP32's
+// getLocalTime(): that treats any year up to 2016 as "clock not set" and
+// retries for up to 5 s, which stalled loop() on every clock read until the
+// ventilator had set the time. Same validity rule here, but non-blocking:
+// before the clock is set (it starts at 1970), the result is invalid.
 void DateTime::readRTC() {
+    time_t now = time(nullptr);
     struct tm timeinfo;
-    if (!getLocalTime(&timeinfo)) {
+    localtime_r(&now, &timeinfo);
+    if (timeinfo.tm_year <= (2016 - 1900)) {
         _valid = false;
         return;
     }

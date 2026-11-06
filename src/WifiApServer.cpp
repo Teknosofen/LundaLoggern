@@ -27,11 +27,24 @@ WifiApServer::WifiApServer(String ssid, String password)
 }
 
 // SPIFFS is already mounted by setup() (needed for /logo and /configs).
+// Safe to call repeatedly (every long press): the routes are registered with
+// the WebServer only the first time, because WebServer keeps every handler
+// added with on() and would otherwise grow a duplicate list on each call.
 void WifiApServer::begin() {
     WiFi.softAP(_ssid.c_str(), _password.c_str());   // also switches the radio on
 
-    setupWebServer();
+    if (!_routesRegistered) {
+        setupWebServer();
+        _routesRegistered = true;
+    }
     server.begin();
+}
+
+// Stop the HTTP server and switch the radio off. begin() restarts both.
+void WifiApServer::end() {
+    server.stop();
+    WiFi.softAPdisconnect(true);   // true = also clear the AP configuration
+    WiFi.mode(WIFI_OFF);
 }
 
 void WifiApServer::handleClient() {

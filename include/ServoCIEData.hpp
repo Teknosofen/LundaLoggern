@@ -35,6 +35,9 @@
 //      'A' <p0><s0>...  0x7F <CHK>   alarms: priority/status byte pairs
 //      0x81 <phase>                  breath phase (0x10 insp, 0x20 pause, 0x30 exp)
 //      0x80 <hi><lo>                 one absolute curve sample
+//      <diff>                        one delta curve sample, signed 8-bit
+//                                    (0x82..0x7E), added to the previous
+//                                    sample of the same curve channel
 //      0xE0 <code>      0x7F <CHK>   error / stream stopped
 //  Data values are 16-bit, MSB first, in the range 0x0000..0x7EFF.
 //  0x7EFF means "no valid data". Because a high byte is therefore never 0x7F,
@@ -173,19 +176,19 @@ public:
     // the ventilator's frames.
     static const int MaxMetrics = 20;
     static const int MaxSettings = 20;
-    static const int MaxCurves = 5;   // note: handleValueData() only handles 4 curve slots
+    static const int MaxCurves = 5;
 
     Configs metrics[MaxMetrics];
     int metricCount = 0;
-    bool metricConfigLoaded = false;  // NOTE: never set (initializeConfigs() uses a local of the same name)
+    bool metricConfigLoaded = false;  // set by initializeConfigs()
 
     Configs settings[MaxSettings];
     int settingCount = 0;
-    bool settingConfigLoaded = false; // NOTE: never set, see above
+    bool settingConfigLoaded = false; // set by initializeConfigs()
 
     Configs curves[MaxCurves];
     int curveCount = 0;
-    bool curveConfigLoaded = false;   // NOTE: never set, see above
+    bool curveConfigLoaded = false;   // set by initializeConfigs()
 
     static const int MaxAlarms = 100; // SCI limit for SDADA
     Configs alarms[MaxAlarms];
@@ -247,6 +250,9 @@ private:
     void handleAlarmData(uint8_t NextSCI_chr);
     void handleErrorData(uint8_t NextSCI_chr);
     void handleRunMode(uint8_t NextSCI_chr);
+    /// Store a curve sample in the current slot and advance; emits the sample
+    /// set to HostCli after the last slot. valid=false skips the slot.
+    void storeCurveSample(uint16_t raw, bool valid = true);
 
     // --- Link timing (millis() values) ---
     bool comOpen = false;
@@ -304,8 +310,7 @@ private:
     char PAYLOAD_SDADB[64];   // unused
     char PAYLOAD_SDADS[64];   // unused
     char CMD_SDADS[72];       // "SDADS" + up to 20 setting channels
-    char CMD_SDADC[32];
-    char PAYLOAD_SDADC[32];
+    char CMD_SDADC[32];       // "SDADC" + up to 5 curve channels
     char CMD_RCCO[16];
     char CMD_RDAD[8];
     char CMD_RADAB[8];
@@ -322,13 +327,10 @@ private:
     int Error_info;    // last error code from an error frame
     char inByte;       // last byte read by getCIEResponse()
 
-    // Accumulators for the curve sample being received, one per curve slot.
-    // TODO: could be replaced by curves[n].unscaled directly.
-    uint16_t cieCurve1 = 0; // curve slot 0
-    uint16_t cieCurve2 = 0; // curve slot 1
-    uint16_t cieCurve3 = 0; // curve slot 2
-    uint16_t cieCurve4 = 0; // curve slot 3
-    uint16_t cieCurve5 = 0; // unused (no handler for slot 4)
+    // Curve stream: absolute sample being assembled (after 0x80), and whether
+    // each slot has received an absolute value that delta samples can build on.
+    uint16_t curveAccum = 0;
+    bool curveHasBase[MaxCurves] = {};
 
     uint8_t breathPhase = 0;   // latest phase byte, see getBreathPhase()
 

@@ -15,9 +15,6 @@
 //    - small text-file helpers (write, append, list, delete)
 //
 //  All files live in the SD root; there are no subdirectories.
-//
-//  Note: the file name is spelled SDmanager.hpp but included as
-//  "SDManager.hpp". That works on Windows (case-insensitive file system) only.
 // =============================================================================
 #include <Arduino.h>
 #include "main.hpp"

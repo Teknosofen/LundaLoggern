@@ -154,11 +154,10 @@ void ImageRenderer::drawCenteredText(const String& text, int y) {
     tft.drawString(text, x, y);
 }
 
-// Meant as erase-then-draw, like drawDateTimeAt(). But prevIDText is a local
-// that starts empty on every call, so the erase step prints nothing and the
-// previous ID is not removed before the new one is drawn.
+// Erase-then-draw, like drawDateTimeAt(): free fonts paint no background, so
+// the previous ID is printed again in the background colour first.
 void ImageRenderer::drawServoID(const String& servoID) {
-  String prevIDText = "";
+  static String prevIDText = "";   // what is currently on screen
   tft.setFreeFont(FSS9);
   tft.setTextSize(smallTextSize);
 

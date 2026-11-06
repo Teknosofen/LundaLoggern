@@ -197,11 +197,16 @@ void loop() {
     };
 
     // Detect card insertion/removal (rate-limited inside updateCardStatus()).
-    if (sd.updateCardStatus()) {
-      hostCom.println("🔄 SD status changed!");
-      renderer.drawSDStatusIndicator(sd.isCardPresent());
+    // The indicator follows isCardPresent() rather than the return value of
+    // updateCardStatus(): the web dashboard also calls updateCardStatus(), and
+    // when it sees a change first, this call would report "no change".
+    sd.updateCardStatus();
+    static bool shownSdPresent = sd.isCardPresent();   // drawn in the first pass above
+    if (sd.isCardPresent() != shownSdPresent) {
+      shownSdPresent = sd.isCardPresent();
+      renderer.drawSDStatusIndicator(shownSdPresent);
       hostCom.print("SD status updated: ");
-      hostCom.println(sd.isCardPresent() ? "true" : "false");
+      hostCom.println(shownSdPresent ? "true" : "false");
     }
 
     // Link supervision: the parser refreshes lastMessageTime on every complete
@@ -265,14 +270,13 @@ void loop() {
       hostCom.println("Key1 long press (>1s)");
       myWiFiServer.begin();
       hostCom.println("Started WiFi");
-      hostCom.printf("Access Point IP: %s\n", myWiFiServer.getApIpAddress());
+      hostCom.printf("Access Point IP: %s\n", myWiFiServer.getApIpAddress().c_str());
       renderer.drawWiFiAPIP(myWiFiServer.getApIpAddress() + "  ", LOGGER_SSID);
       renderer.drawWiFiPromt("Press key to disable");
 
     } else {                                    // short press: stop the access point
       hostCom.println("interactionKey1 short press");
-      WiFi.softAPdisconnect(true);              // true = erase settings
-      WiFi.mode(WIFI_OFF);                      // turn off WiFi radio
+      myWiFiServer.end();                       // stop HTTP server, access point and radio
       hostCom.println("WiFi Access Point stopped");
       renderer.drawWiFiAPIP("WiFi OFF      ", "No SSID        ");
       renderer.drawWiFiPromt("Press key to enable");
