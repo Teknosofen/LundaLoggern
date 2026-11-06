@@ -1,3 +1,8 @@
+// =============================================================================
+//  DateTime.cpp — date/time value and ESP32 system clock access.
+//  See DateTime.hpp for how the clock is set.
+// =============================================================================
+
 #include "DateTime.hpp"
 #include <cstdio> // snprintf
 
@@ -30,8 +35,9 @@ String DateTime::rawString() const {
 }
 
 
-// new 2025-09-27
-// RTC Integration
+// --- System clock -----------------------------------------------------------
+
+// struct tm counts years from 1900 and months from 0.
 void DateTime::setRTC() const {
     struct tm timeinfo;
     timeinfo.tm_year = _year - 1900;
@@ -45,6 +51,10 @@ void DateTime::setRTC() const {
     settimeofday(&now, nullptr);
 }
 
+// getLocalTime() (Arduino-ESP32) treats any year up to 2016 as "clock not
+// set" and keeps retrying for up to its default timeout of 5 s before it
+// gives up. So until the ventilator has provided the time, every call to
+// readRTC()/getRTC() blocks for about 5 s and returns an invalid DateTime.
 void DateTime::readRTC() {
     struct tm timeinfo;
     if (!getLocalTime(&timeinfo)) {

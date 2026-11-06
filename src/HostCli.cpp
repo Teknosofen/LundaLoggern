@@ -104,7 +104,7 @@ void HostCli::emitCurveSample() {
         curveSampleCount = 0;
     }
 
-    // Decimation
+    // Decimation: emit samples 0, N, 2N, ... (counter starts at 0).
     if (curveDecimation > 1) {
         if ((curveSampleCount++ % curveDecimation) != 0) return;
     } else {
@@ -123,6 +123,9 @@ void HostCli::emitCurveSample() {
 // =============================================================
 // Command parsing
 // =============================================================
+
+// Non-blocking: consume whatever bytes are waiting, execute each complete
+// line. '\r' is ignored, so CRLF and LF line endings both work.
 void HostCli::update() {
     while (hostCom.available()) {
         char c = (char)hostCom.read();
@@ -137,7 +140,9 @@ void HostCli::update() {
         if (inBuf.length() < 200) {
             inBuf += c;
         } else {
-            // overflow — drop and report once we see a newline
+            // Overflow: replace the buffer with a marker. Characters after the
+            // marker are still appended, so the line ends up rejected at the
+            // newline, either as "input line too long" or as an unknown command.
             inBuf = "<<OVERFLOW>>";
         }
     }

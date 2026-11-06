@@ -1,84 +1,101 @@
+// =============================================================================
+//  main.cpp — LundaLoggern application entry point
+// -----------------------------------------------------------------------------
+//  Owns all global device objects and ties them together. There is no separate
+//  "controller" class: setup() brings the hardware up in order, and loop()
+//  services every module without blocking (apart from the CIE re-init, which
+//  waits briefly for ventilator replies).
+//
+//  Data path (see Documentation/DesignSummary.md for the full picture):
+//    SERVO-u --RS232--> ServoCIEData (parser) --> SDManager (log files on SD)
+//                                             \-> HostCli   (optional USB streams)
+//    main.cpp reads parser state (device ID, breath phase, link status) and
+//    updates the TFT through ImageRenderer.
+//
+//  Flashing a new board
+//  --------------------
+//  The logo bitmap and the factory-default config files live in the SPIFFS
+//  partition (folder data/). Upload them once per board, and again whenever a
+//  file in data/ changes:
+//      pio run --target uploadfs
+//  To wipe SPIFFS first:
+//      pio run --target cleanfs
+//
+//  TFT_eSPI library setup (one-time, in .pio/libdeps/.../TFT_eSPI)
+//  ---------------------------------------------------------------
+//  User_Setup_Select.h must enable only:
+//      #include <User_Setups/Setup206_LilyGo_T_Display_S3.h>   // ST7789 170 x 320
+//  and User_Setup.h must contain:
+//      #define ST7789_DRIVER
+//      #define TFT_WIDTH  170
+//      #define TFT_HEIGHT 320
+// =============================================================================
+
 #include <Arduino.h>
 #include "main.hpp"
 
-// ---------------------------------
-// logo BMP file as well as factory default config files are stored in SPIFFS
-// to send to device run:
-// pio run --target uploadfs
-//
-// to format SPIFFS run:
-// pio run --target cleanfs
-// ---------------------------------
 
+// --- Global device objects ---------------------------------------------------
+// Construction order matters only where one object stores a reference/pointer
+// to another; taking the address of a not-yet-constructed global is fine.
 
-// in the TFT_eSPI TFT_eSPI_User_setup_Select.H ensure that the 
-// line 133 #include <User_Setups/Setup206_LilyGo_T_Display_S3.h>     // For the LilyGo T-Display S3 based ESP32S3 with ST7789 170 x 320 TFT
+TFT_eSPI tft = TFT_eSPI();                   // display driver (pins from TFT_eSPI setup)
+TFT_eSprite spriteLeft = TFT_eSprite(&tft);  // currently unused
+ImageRenderer renderer(tft);                 // all drawing on the TFT goes through this
 
-// In the TFT_eSPI_User_setup.H 
-// line 55 #define ST7789_DRIVER      // Full configuration option, define additional parameters below for this display
-// line 87 #define TFT_WIDTH  170 // ST7789 170 x 320
-// line 92 #define TFT_HEIGHT 320 // ST7789 240 x 320
-
-
-TFT_eSPI tft = TFT_eSPI(); // Initialize the display
-TFT_eSprite spriteLeft = TFT_eSprite(&tft); // Create sprite object left
-ImageRenderer renderer(tft);
-
-// SDManager sd(hspi, HSPI_CS, &dateTime); // Pass your CS pin here
-
+// Channel configuration files. Looked up on the SD card first, with the SPIFFS
+// copy as fallback (see ServoCIEData::initializeConfigs()).
 const char* MetricConfigPath  = "/MetricConfig.txt";
 const char* SettingConfigPath = "/SettingConfig.txt";
 const char* CurveConfigPath   = "/CurveConfig.txt";
 const char* AlarmConfigPath   = "/AlarmConfig.txt";
 
+// The SD card has a dedicated SPI bus (HSPI); pins come from the PlatformIO build flags.
 SPIClass hspi(HSPI);
-const SPISettings SENSOR_SPI_SETTINGS = SPISettings(25000000, MSBFIRST, SPI_MODE0); // 25 MHz
+const SPISettings SENSOR_SPI_SETTINGS = SPISettings(25000000, MSBFIRST, SPI_MODE0); // 25 MHz, currently unused
 
-SDManager sd(hspi, HSPI_CS, &dateTime); // Pass your CS pin here
+SDManager sd(hspi, HSPI_CS, &dateTime);      // SD card mount state and log files
 
-ServoCIEData servoCIEData(&sd);
+ServoCIEData servoCIEData(&sd);              // ventilator protocol + channel data; writes logs via `sd`
 
-WifiApServer myWiFiServer(LOGGER_SSID, LOGGER_PW); //"neonatal");
+WifiApServer myWiFiServer(LOGGER_SSID, LOGGER_PW); // SoftAP + web UI, started on demand
 
-DateTime dateTime; // Global DateTime object
+DateTime dateTime; // Global DateTime object; the ESP32 system clock is the actual RTC
 
-Button interactionKey1(INTERACTION_BUTTON_PIN);  // GPIO14 Key 2
-
-// image handling 
-// uint8_t* imageBuffer = nullptr;
-// size_t imageSize = 0;
+Button interactionKey1(INTERACTION_BUTTON_PIN);  // GPIO14 ("key 2")
 
 
-
+// =============================================================================
+// setup() — bring up USB, display, ventilator UART, SD, SPIFFS, configs, CIE
+// =============================================================================
 void setup() {
-  hostCom.begin(115200); // Initialize hostCom for debugging
-  // delay(5000); // Wait for Serial to initialize
+  hostCom.begin(115200); // USB-CDC to the PC
 
+  // HostCli prints its READY banner here, so a PC tool can sync on it.
   hostCli.attach(&sd, &servoCIEData);
   hostCli.begin();
 
-  // ensure that the servoCOM used the appripriate parity!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   hostCom.println("LundaLogger setup started");
 
-  renderer.begin(); //initialize display
+  renderer.begin(); // init TFT and show the boot text
 
-  // pinMode(RXD2, INPUT);
-  // pinMode(TXD2, OUTPUT);
+  // The SERVO SCI link requires 8 data bits, EVEN parity, 1 stop bit.
+  // With the wrong parity the ventilator silently ignores every command.
   servoCom.begin(SERVO_BAUD, SERIAL_8E1, RXD2, TXD2); // RX = GPIO16, TX = GPIO17
 
-  delay(1000); // Wait for Serial to initialize
+  delay(1000); // give the UART and the transceiver time to settle
 
   hspi.begin(HSPI_SCLK, HSPI_MISO, HSPI_MOSI, HSPI_CS); // SCK, MISO, MOSI, CS
-  bool initSuccess = sd.begin(); // Attempt to initialize SD card and update internal status
-  // sd.setCardPresent(initSuccess); // Explicit status tracking, done in method already
+  bool initSuccess = sd.begin(); // mounts the card; sd.isCardPresent() reflects the result
 
-  // Debug 
-  // sd.deleteAllFiles();  // Delete everything on the SD card
+  // Debug only — DELETES every file in the SD root:
+  // sd.deleteAllFiles();
 
   if (sd.isCardPresent()) {
     hostCom.println("✅ SD card is present and mounted.");
 
-    // Write and append to a file
+    // Bring-up smoke test: proves write and append work. /log.txt is not part
+    // of the logged data and can be deleted at any time.
     if (sd.writeTextFile("/log.txt", "HSPI test initialized.")) {
       hostCom.println("✍️ Wrote initial log file.");
     }
@@ -90,54 +107,37 @@ void setup() {
     hostCom.println("❌ SD card is not detected or failed to mount.");
   }
 
-  // Check where this tst is (to be) made and remove redundant uses, wcheck in the WiiAPServer as well
+  // SPIFFS holds the factory-default configs (fallback when the SD card has
+  // none) and the logo for the web page. It must be mounted before
+  // initializeConfigs(). begin(false) = do not format on failure, so a broken
+  // partition is reported instead of being silently wiped.
   if (!SPIFFS.begin(false)) {
       hostCom.println("❌ SPIFFS mount failed");
    } else {
       hostCom.println("✅ SPIFFS mounted successfully");
   }
-  
+
+  // Load channel definitions first: CIE_setup() builds the subscription
+  // commands (SDADB/SDADS/SDADA) from them.
   hostCom.println("Initializing CIE configs:");
   servoCIEData.initializeConfigs(MetricConfigPath, SettingConfigPath, CurveConfigPath, AlarmConfigPath);
   hostCom.println("Initializing CIE com:");
-  servoCIEData.begin();
-  // myWiFiServer.setText(servoCIEData.getServoID());
-  // renderer.drawServoID(servoCIEData.getServoID());
+  servoCIEData.begin(); // ESC + full init sequence; fails quickly if no ventilator is connected
 
-  // myWiFiserver.setLogoData(lundaLogo, 100, 100);
+  // Dashboard content for the web root page. Label slots 0..3 are shown as a list.
   myWiFiServer.setText("LundaLogger");
-  // myWiFiServer.setTextAndValues("LundaLogger", 23.5, 67.8, 1013.2, 3.7);
   myWiFiServer.setLabel(0, lundaLoggerVerLbl);
   myWiFiServer.setLabel(1, " ");
   const String SSIDStr = LOGGER_SSID;
   myWiFiServer.setLabel(2, "SSID: " + SSIDStr);
   myWiFiServer.setLabel(3, servoCIEData.getServoID());
 
+  // Must be set before myWiFiServer.begin(): the /download and /delete routes
+  // are only registered if these are enabled when the server starts.
   myWiFiServer.enableSdFileDownloads(true);
   myWiFiServer.enableSdFileDelete(true);
-  
-  // skipped file listing 
-  // sd.listRoot();  // List all files in root
 
   interactionKey1.begin();
-
-  // image transfer fr SPIFFS to PSRAM
-  // File file = SPIFFS.open("/LogoWeb.png", "r");
-  // if (!file) {
-  //   Serial.println("Failed to open image");
-  //   return;
-  // }
-
-  // imageSize = file.size();
-  // imageBuffer = (uint8_t*)ps_malloc(imageSize);
-  // if (!imageBuffer) {
-  //   Serial.println("PSRAM allocation failed");
-  //   return;
-  // }
-
-  // file.read(imageBuffer, imageSize);
-  // file.close();
-
 
   if (psramFound()) {
     hostCom.println("PSRAM is available.");
@@ -149,36 +149,46 @@ void setup() {
 
 }
 
+// =============================================================================
+// loop() — three layers of work:
+//   1. first pass only: draw the static main screen
+//   2. every SET_LOOP_TIME (200 ms): clock, breath phase, SD status, link
+//      supervision and re-init
+//   3. every pass: feed one ventilator byte to the parser, serve HTTP and USB
+//      commands, handle the button
+// =============================================================================
 void loop() {
 
-  unsigned long now = millis();
+  unsigned long now = millis(); // timestamp for the link-supervision checks below
 
-  static bool initLoop = false; // Flag to check if loop has been initialized
+  // --- 1. First pass: replace the boot text with the main screen layout ------
+  static bool initLoop = false;
   if (!initLoop) {
-    initLoop = true; // Set the flag to true to indicate loop has been initialized
+    initLoop = true;
     hostCom.println("LundaLogger loop start init");
-    renderer.clear(); // Clear the display with blue color
+    renderer.clear(); // fill with the logo background colour
     renderer.pushFullImage(-3, -5, 100, 100, lundaLogo);
     renderer.drawStatusField();
-    renderer.drawCOMStatusIndicator(servoCIEData.isComOpen());  
+    renderer.drawCOMStatusIndicator(servoCIEData.isComOpen());
     renderer.drawSDStatusIndicator(sd.isCardPresent());
     renderer.drawLabel();
     renderer.drawWiFiField();
-    renderer.drawWiFiAPIP("WiFi OFF      ", "No SSID        ");
+    renderer.drawWiFiAPIP("WiFi OFF      ", "No SSID        ");  // trailing spaces overwrite longer old text
     renderer.drawWiFiPromt("Press key to enable ");
     renderer.drawServoID(servoCIEData.getServoID());
-    renderer.drawDateTimeAt(dateTime.getRTC()); // Draw current RTC time
+    renderer.drawDateTimeAt(dateTime.getRTC());
 
     hostCom.println("LundaLogger now initialized");
-  } // init loop
+  }
 
-  static uint32_t loopStartTime = micros(); // Record the start time of the loop
-  if (micros() - loopStartTime > SET_LOOP_TIME) { // time loop, Check if enough time has passed since the last loop iteration
-    loopStartTime = micros(); // Reset the start time for the next loop
+  // --- 2. Slow loop (every SET_LOOP_TIME microseconds) -----------------------
+  static uint32_t loopStartTime = micros();
+  if (micros() - loopStartTime > SET_LOOP_TIME) {
+    loopStartTime = micros();
 
-    renderer.drawDateTimeAt(dateTime.getRTC()); // Draw current RTC time
-    
-    // Update breath phase of display
+    renderer.drawDateTimeAt(dateTime.getRTC());
+
+    // Redraw the breath-phase dot only when the phase actually changes.
     static uint8_t lastBreathPhase = 0;
     uint8_t currentBreathPhase = servoCIEData.getBreathPhase();
     if (lastBreathPhase != currentBreathPhase) {
@@ -186,30 +196,35 @@ void loop() {
       renderer.drawBreathPhase(currentBreathPhase);
     };
 
+    // Detect card insertion/removal (rate-limited inside updateCardStatus()).
     if (sd.updateCardStatus()) {
       hostCom.println("🔄 SD status changed!");
-      // Optional: trigger redraw, disable logging, etc.
       renderer.drawSDStatusIndicator(sd.isCardPresent());
       hostCom.print("SD status updated: ");
       hostCom.println(sd.isCardPresent() ? "true" : "false");
     }
 
-    // Supervise communication timeout
+    // Link supervision: the parser refreshes lastMessageTime on every complete
+    // frame. Silence for TIMEOUT_MS means the cable is unplugged, the
+    // ventilator is in standby, or it stopped streaming.
     if (servoCIEData.isComOpen() && (now - servoCIEData.getLastMessageTime() > TIMEOUT_MS)) {
         hostCom.println("⚠️ Connection lost due to timeout.");
         servoCIEData.setComOpen(false);
-        servoCIEData.setLastInitAttempt(now); // Reset init timer
+        servoCIEData.setLastInitAttempt(now); // first retry after INIT_INTERVAL_MS
         renderer.drawServoID("SERVO:           ");
         renderer.drawCOMStatusIndicator(servoCIEData.isComOpen());
     }
 
-    // Retry INIT if communication is lost
+    // While the link is down, probe the ventilator every INIT_INTERVAL_MS and,
+    // when it answers, re-run the full init sequence (time, ID, subscriptions,
+    // start of continuous streaming). Note: this blocks loop() for the
+    // duration of the init (a few seconds when the ventilator answers).
     if (!servoCIEData.isComOpen() && (now - servoCIEData.getLastInitAttempt() > INIT_INTERVAL_MS)) {
       hostCom.println("🔄 (Re)Sending INIT...");
       if (servoCIEData.CIE_comCheck()) {
         hostCom.println("✅ CIE communication re-established.");
         servoCIEData.setComOpen(true);
-        servoCIEData.setLastMessageTime(now); // Reset message timer
+        servoCIEData.setLastMessageTime(now);
         servoCIEData.CIE_setup();
         myWiFiServer.setText(servoCIEData.getServoID());
         const String SSIDStr = LOGGER_SSID;
@@ -222,31 +237,28 @@ void loop() {
       }
       servoCIEData.setLastInitAttempt(now);
 
-      // Add check for num connected clients here, if there are client connected, present the second QR code and info
-      // add check for num clients in WiFi class:
-      // assume that WiFi iff will return zero clients
-      // int numClients = WiFi.softAPgetStationNum();
-      //     if (numClients > 0 && !qr.isShowingHomepageQR()) {
-      // qr.showHomepageQR("http://192.168.4.1/");
-      // 
-
+      // TODO: when WiFi clients are connected (WiFi.softAPgetStationNum() > 0),
+      // show a QR code for http://192.168.4.1/ via QRHandler.
     }
   }
-  // check for and manage serial data from CIE and ventilator
+
+  // --- 3. Every pass ----------------------------------------------------------
+  // Feed one byte per pass to the CIE state machine. Bytes that arrive while
+  // the loop is busy (SD writes, HTTP requests) wait in the UART receive buffer.
   if (servoCom.available()) {
-    char inByte = servoCom.read();              // get the byte from the ventilator 
-    // hostCom.print(inByte, HEX);
+    char inByte = servoCom.read();
+    // hostCom.print(inByte, HEX);              // debug: dump raw ventilator bytes
     servoCIEData.parseCIEData(inByte);
   }
 
-  myWiFiServer.handleClient();                  // This keeps the web server alive
+  myWiFiServer.handleClient();                  // serve pending HTTP requests (no-op while WiFi is off)
 
-  hostCli.update();                             // Service USB-CDC commands
+  hostCli.update();                             // read and execute USB-CDC commands
 
+  // Button: long press (>= LONG_KEY_PRESS_DURATION) starts the WiFi access
+  // point and web server, short press stops them. Events are evaluated on
+  // release, so the press length is known.
   interactionKey1.update();
-  // if (interactionKey1.wasPressed()) {
-  //   hostCom.println("interactionKey1 pressed");
-  // }
 
   if (interactionKey1.wasReleased()) {
     if (interactionKey1.wasLongPress()) {
@@ -256,9 +268,8 @@ void loop() {
       hostCom.printf("Access Point IP: %s\n", myWiFiServer.getApIpAddress());
       renderer.drawWiFiAPIP(myWiFiServer.getApIpAddress() + "  ", LOGGER_SSID);
       renderer.drawWiFiPromt("Press key to disable");
-      // Add QR stuff here
 
-    } else {                                    // Stop WiFi Access Point
+    } else {                                    // short press: stop the access point
       hostCom.println("interactionKey1 short press");
       WiFi.softAPdisconnect(true);              // true = erase settings
       WiFi.mode(WIFI_OFF);                      // turn off WiFi radio

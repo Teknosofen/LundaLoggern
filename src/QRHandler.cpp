@@ -1,3 +1,7 @@
+// =============================================================================
+//  QRHandler.cpp — QR code screens (currently unused; see QRHandler.hpp).
+// =============================================================================
+
 #include "QRHandler.hpp"
 #include "main.hpp"
 
@@ -5,9 +9,11 @@ QRHandler::QRHandler() : tft(), showingHomepageQR(false) {}
 
 void QRHandler::begin() {
 
-    
+
 }
 
+// "WIFI:T:WPA;S:<ssid>;P:<password>;;" is the de-facto standard WiFi QR
+// payload understood by Android and iOS cameras.
 void QRHandler::showWiFiQR(const char* ssid, const char* password) {
   tft.fillScreen(TFT_LOGOBACKGROUND);
   tft.drawString("Scan to connect Wi-Fi", 10, 5);
@@ -35,13 +41,17 @@ bool QRHandler::isShowingHomepageQR() const {
   return showingHomepageQR;
 }
 
+// QR version 4 with low error correction holds up to about 78 bytes of text.
+// Only dark modules are painted (white squares on the current background).
+// Size: 33 modules x 6 px = 198 px square at (20, 30), which is taller than
+// the 170 px screen in landscape; scale/offset need adjusting before use.
 void QRHandler::drawQRCode(const char *text) {
   uint8_t qrcodeData[qrcode_getBufferSize(4)];
   qrcode_initText(&qrcode, qrcodeData, 4, ECC_LOW, text);
 
-  int scale = 6;
+  int scale = 6;     // pixels per module
   int offsetX = 20;
-  int offsetY = 30;
+  int offsetY = 30;  // leave room for the caption line
 
   for (uint8_t y = 0; y < qrcode.size; y++) {
     for (uint8_t x = 0; x < qrcode.size; x++) {

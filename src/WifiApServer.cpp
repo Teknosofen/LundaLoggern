@@ -1,3 +1,9 @@
+// =============================================================================
+//  WifiApServer.cpp — WiFi access point and web interface. See WifiApServer.hpp
+//  for the route table. The pages share one look: background #84B6D6 (the TFT
+//  logo colour) and blue rounded buttons.
+// =============================================================================
+
 #include "WifiApServer.hpp"
 #include <WiFi.h>
 #include <WebServer.h>
@@ -5,10 +11,10 @@
 #include <SPIFFS.h>
 #include "main.hpp"
 
-extern SDManager sd;
-extern WifiApServer WiFiserver;
+extern SDManager sd;              // global from main.cpp: SD status and files
+extern WifiApServer WiFiserver;   // NOTE: no object with this name exists; unused
 
-WebServer server(80);
+WebServer server(80);             // the single HTTP server instance (file scope)
 
 WifiApServer::WifiApServer(String ssid, String password)
     : _ssid(ssid), _password(password),
@@ -20,18 +26,12 @@ WifiApServer::WifiApServer(String ssid, String password)
     }
 }
 
+// SPIFFS is already mounted by setup() (needed for /logo and /configs).
 void WifiApServer::begin() {
-    WiFi.softAP(_ssid.c_str(), _password.c_str());
+    WiFi.softAP(_ssid.c_str(), _password.c_str());   // also switches the radio on
 
-    // if (!SPIFFS.begin(true)) {
-    //     hostCom.println("Failed to mount SPIFFS");
-    // }
     setupWebServer();
     server.begin();
-    
-    // if (!loadLogoToPsram("/LogoWeb.png")) {
-    //     Serial.println("⚠️ Logo image not loaded.");
-    // }
 }
 
 void WifiApServer::handleClient() {
@@ -62,12 +62,12 @@ String WifiApServer::getApIpAddress() const {
     return WiFi.softAPIP().toString();
 }
 
+// Register all routes. /download and /delete only exist if enabled, so a
+// disabled feature returns 404 rather than relying on the page hiding its button.
 void WifiApServer::setupWebServer() {
     server.on("/", [this]() { handleRoot(); });
     server.on("/files", [this]() { handleFileManager(); });
     server.on("/logo", HTTP_GET, [this]() { handleLogo(); });
-    
-    // ✅ New route for config viewer
     server.on("/configs", [this]() { handleConfigViewer(); });
 
     if (_downloadEnabled)
@@ -76,12 +76,34 @@ void WifiApServer::setupWebServer() {
         server.on("/delete", HTTP_POST, [this]() { handleFileDelete(); });
 }
 
+// HTTP basic auth. On failure, sends the 401 login challenge; the caller just
+// returns. Note: basic auth over plain HTTP is not encrypted. It keeps casual
+// users of the access point out, nothing more.
+bool WifiApServer::ensureAuthenticated() {
+    if (server.authenticate(LOGGER_WEB_USER, LOGGER_WEB_PW)) {
+        return true;
+    }
+    server.requestAuthentication();
+    return false;
+}
+
 void WifiApServer::handleRoot() {
     server.send(200, "text/html", generateHtmlPage());
 }
 
+// File manager page: a checkbox table of the files in the SD root, with
+// Download and Delete buttons. The table sits outside both forms; on submit,
+// copySelection() copies the checked file names into the submitting form as
+// hidden "file" fields, so one table serves both actions.
+// File names are HTML-escaped because they come from the card.
 void WifiApServer::handleFileManager() {
+    if (!ensureAuthenticated()) return;
+
     File root = SD.open("/");
+    if (!root || !root.isDirectory()) {
+        server.send(503, "text/plain", "SD card is not available");
+        return;
+    }
     File file = root.openNextFile();
 
     String html = "<!DOCTYPE html><html><head><title>File Manager</title>";
@@ -136,18 +158,21 @@ void WifiApServer::handleFileManager() {
         if (!file.isDirectory()) {
             String name = String(file.name());
             size_t sizeKB = file.size() / 1024;
+            String escapedName = htmlEscape(name);
             html += "<tr>";
-            html += "<td><input type='checkbox' name='file' value='" + name + "'></td>";
-            html += "<td>" + name + "</td>";
+            html += "<td><input type='checkbox' name='file' value='" + escapedName + "'></td>";
+            html += "<td>" + escapedName + "</td>";
             html += "<td>" + String(sizeKB) + "</td>";
             html += "</tr>";
         }
+        file.close();
         file = root.openNextFile();
     }
+    root.close();
 
     html += "</table><br>";
 
-    // --- Buttons (same style as on main page) ---
+    // --- Buttons. The forms exist even if a route is disabled; that request then gets a 404. ---
     html += "<form id='downloadForm' method='GET' action='/download' onsubmit='copySelection(\"downloadForm\")'>";
     html += "<button type='submit'>Download Selected</button>";
     html += "</form>";
@@ -167,17 +192,26 @@ void WifiApServer::handleFileManager() {
 }
 
 
+// GET /download?file=a.txt[&file=b.txt...]
+// One HTTP response carries one file, so only the FIRST valid, existing name
+// is sent, even when several files were selected. Names that fail
+// safeFileArg() are skipped.
 void WifiApServer::handleFileDownload() {
+    if (!ensureAuthenticated()) return;
+
     for (int i = 0; i < server.args(); ++i) {
-        String f = "/" + server.arg(i);  // Ensure leading slash
+        String requested = safeFileArg(i);
+        if (requested.length() == 0) continue;
+
+        String f = "/" + requested;  // all logs are in the SD root
         if (SD.exists(f.c_str())) {
             File file = SD.open(f.c_str(), FILE_READ);
 
-            // Extract filename
+            // Bare file name for the browser's "save as" dialog.
             String path = file.name();
             String fname = path.substring(path.lastIndexOf('/') + 1);
 
-            // Trigger browser download
+            // "attachment" makes the browser save the file instead of showing it.
             server.sendHeader("Content-Disposition", "attachment; filename=\"" + fname + "\"");
             server.streamFile(file, "application/octet-stream");
             file.close();
@@ -187,20 +221,29 @@ void WifiApServer::handleFileDownload() {
     server.send(404, "text/plain", "No file found");
 }
 
+// POST /delete with one or more "file" fields. Deletes every valid, existing
+// name, then redirects back to the file manager.
 void WifiApServer::handleFileDelete() {
+    if (!ensureAuthenticated()) return;
+
     for (int i = 0; i < server.args(); ++i) {
-        String f = "/" + server.arg(i);
+        String requested = safeFileArg(i);
+        if (requested.length() == 0) continue;
+
+        String f = "/" + requested;
         hostCom.println("Deleting file: " + f);
         if (SD.exists(f.c_str())) {
             SD.remove(f.c_str());
         }
     }
 
-    // ✅ Redirect to file manager to show updated list (prevents stale checkboxes)
+    // Redirect (Post/Redirect/Get): shows the updated list, and a browser
+    // refresh does not resubmit the delete.
     server.sendHeader("Location", "/files", true);
     server.send(302, "text/plain", "");
 }
 
+// Unused. (Entries are not closed while iterating.)
 std::vector<String> WifiApServer::listSdFiles() {
     std::vector<String> list;
     File root = SD.open("/");
@@ -212,8 +255,7 @@ std::vector<String> WifiApServer::listSdFiles() {
     return list;
 }
 
-// void WiFiAPServer::initLogo() [];
-
+// Logo for the dashboard, streamed from SPIFFS (uploaded with "pio run --target uploadfs").
 void WifiApServer::handleLogo() {
     File file = SPIFFS.open("/LogoWeb.png", "r");
     if (!file) {
@@ -224,10 +266,17 @@ void WifiApServer::handleLogo() {
     file.close();
 }
 
+// Config viewer: shows the SPIFFS copies of the config files as plain text.
+// After boot these match what was actually loaded, because initializeConfigs()
+// copies a valid SD config to SPIFFS. Edits made on the SD card after boot
+// are not shown until the next reboot.
+// DeviceConfig.txt is listed for the planned device settings; the firmware
+// does not read it yet (SSID/password come from main.hpp).
 void WifiApServer::handleConfigViewer() {
+    if (!ensureAuthenticated()) return;
+
     String html = "<!DOCTYPE html><html><head><title>Configuration Files</title>";
-    
-    // 🌈 Apply unified color theme and soft styling
+
     html += "<style>";
     html += "body { background-color: #84B6D6; font-family: Arial, sans-serif; color: #000; margin: 20px; }";
     html += "h2, h3 { text-align: center; }";
@@ -241,7 +290,7 @@ void WifiApServer::handleConfigViewer() {
     
     html += "<h2>Configuration Files</h2>";
 
-    // --- Inline helper to read file content ---
+    // Read a whole SPIFFS file into a String (config files are a few kB at most).
     auto readFileContent = [](const char* path) -> String {
         File file = SPIFFS.open(path, "r");
         if (!file) {
@@ -257,23 +306,23 @@ void WifiApServer::handleConfigViewer() {
 
     // --- DeviceConfig.txt ---
     html += "<h3>DeviceConfig.txt</h3>";
-    html += "<pre>" + readFileContent("/DeviceConfig.txt") + "</pre>";
+    html += "<pre>" + htmlEscape(readFileContent("/DeviceConfig.txt")) + "</pre>";
 
     // --- MetricConfig.txt ---
     html += "<h3>MetricConfig.txt</h3>";
-    html += "<pre>" + readFileContent("/MetricConfig.txt") + "</pre>";
+    html += "<pre>" + htmlEscape(readFileContent("/MetricConfig.txt")) + "</pre>";
 
     // --- SettingConfig.txt ---
     html += "<h3>SettingConfig.txt</h3>";
-    html += "<pre>" + readFileContent("/SettingConfig.txt") + "</pre>";
+    html += "<pre>" + htmlEscape(readFileContent("/SettingConfig.txt")) + "</pre>";
 
     // --- CurveConfig.txt ---
     html += "<h3>CurveConfig.txt</h3>";
-    html += "<pre>" + readFileContent("/CurveConfig.txt") + "</pre>";
+    html += "<pre>" + htmlEscape(readFileContent("/CurveConfig.txt")) + "</pre>";
 
     // --- AlarmConfig.txt ---
     html += "<h3>AlarmConfig.txt</h3>";
-    html += "<pre>" + readFileContent("/AlarmConfig.txt") + "</pre>";
+    html += "<pre>" + htmlEscape(readFileContent("/AlarmConfig.txt")) + "</pre>";
 
     // --- Back Button ---
     html += "<form method='GET' action='/'>";
@@ -285,16 +334,18 @@ void WifiApServer::handleConfigViewer() {
     server.send(200, "text/html", html);
 }
 
-extern SDManager sd; // Add this at top of file
+extern SDManager sd; // duplicate of the declaration at the top of the file
 
 
+// Dashboard page "/": SD status banner, title + logo, the four label lines
+// (version, blank, SSID, device ID as set by main.cpp) and navigation buttons.
 String WifiApServer::generateHtmlPage() {
-    String html = "<!DOCTYPE html><html><head><title>LundaLogger Status</title></head><body>";
+    String html = "<!DOCTYPE html><html><head><title>LundaLogger Status</title></head>";
 
-    // 🌈 Set background color to your TFT color (#84B6D6)
     html += "<body style='background-color: #84B6D6; font-family: Arial, sans-serif;'>";
 
-    // --- SD Card Status ---
+    // --- SD card status banner ---
+    // Refresh the card state first (rate-limited to once per second inside).
     sd.updateCardStatus();
     bool sdOk = sd.isCardPresent();
 
@@ -337,11 +388,10 @@ String WifiApServer::generateHtmlPage() {
     html += "<div style='background-image: url(\"/logo\"); background-size: contain; background-repeat: no-repeat; background-position: top center; height: 180px;'>";
     html += "</div></div><br>";
 
-    // --- Values List ---
+    // --- Label list. Only the labels are shown; _values[] are not rendered. ---
     html += "<ul>";
     for (int i = 0; i < 4; ++i) {
-        // html += "<li>" + _labels[i] + ": " + String(_values[i]) + "</li>"; // label and value
-        html += "<li>" + _labels[i]; // label onlu
+        html += "<li>" + htmlEscape(_labels[i]) + "</li>";
     }
     html += "</ul>";
 
@@ -352,7 +402,7 @@ String WifiApServer::generateHtmlPage() {
         html += "</form>";
     }
 
-    // ✅ New "View Config Files" button
+    // Config viewer is always available (read-only).
     html += "<br><form method='GET' action='/configs'>";
     html += "<button type='submit'>View Config Files</button>";
     html += "</form>";
@@ -360,6 +410,46 @@ String WifiApServer::generateHtmlPage() {
     html += "</body></html>";
     return html;
 }
+
+String WifiApServer::htmlEscape(const String& text) {
+    String escaped;
+    escaped.reserve(text.length());
+    for (size_t i = 0; i < text.length(); ++i) {
+        switch (text[i]) {
+            case '&': escaped += "&amp;"; break;
+            case '<': escaped += "&lt;"; break;
+            case '>': escaped += "&gt;"; break;
+            case '"': escaped += "&quot;"; break;
+            case '\'': escaped += "&#39;"; break;
+            default: escaped += text[i]; break;
+        }
+    }
+    return escaped;
+}
+
+// Validate a file name taken from a request. Only plain names in the SD root
+// are accepted: one leading '/' is tolerated, but any other '/', '\' or ".."
+// (path traversal), control characters and quotes are rejected.
+// Note: this checks every request argument, whatever its name.
+String WifiApServer::safeFileArg(int index) {
+    String name = server.arg(index);
+    name.trim();
+    if (name.startsWith("/")) {
+        name.remove(0, 1);
+    }
+    bool unsafe = name.length() == 0 || name.indexOf('/') >= 0 || name.indexOf('\\') >= 0 || name.indexOf("..") >= 0;
+    for (size_t i = 0; i < name.length() && !unsafe; ++i) {
+        char c = name[i];
+        unsafe = (c < 0x20 || c == '"' || c == '\'');
+    }
+    if (unsafe) {
+        hostCom.println("Rejected unsafe file argument: " + name);
+        return "";
+    }
+    return name;
+}
+
+// --- PSRAM image buffer (currently unused; the logo is streamed from SPIFFS) ---
 
 void WifiApServer::freePsramImage() {
     if (imageBuffer) {

@@ -1,8 +1,14 @@
+// =============================================================================
+//  SDManager.cpp — SD card mount state and log files. See SDManager.hpp.
+// =============================================================================
+
 #include "SDManager.hpp"
 #include "HostCli.hpp"
 #include <SD.h>
 
 
+// The DateTime pointer is accepted but not stored (the `dateTime` member stays
+// unset); file naming reads the system clock directly.
 SDManager::SDManager(SPIClass &spiBus, uint8_t csPin, DateTime* dateTime)
   : spi(spiBus), cs(csPin), cardPresent(false), state(SD_IDLE),
     retryCount(0), lastRetryTime(0) {}
@@ -37,13 +43,13 @@ bool SDManager::writeTextFile(const char* path, const String& content) {
   if (!cardPresent) return false;
   setBusy(true);
 
-  File file = SD.open(path, FILE_WRITE);
+  File file = SD.open(path, FILE_WRITE);   // on ESP32, FILE_WRITE creates or truncates
   if (!file) {
     setBusy(false);
     return false;
   }
 
-  file.seek(0);  // Overwrite
+  file.seek(0);  // already at 0 after truncation; kept for clarity
   file.print(content);
   file.close();
   setBusy(false);
@@ -66,13 +72,16 @@ bool SDManager::appendTextFile(const char* path, const String& content) {
   return true;
 }
 
+// Hot-plug detection. The SD library has no card-detect interrupt, so this
+// polls: when unmounted, try to mount; when mounted, check the card still
+// answers. To keep the main loop responsive, checks are limited to one per
+// second, with a 3 s back-off after a failed mount.
 bool SDManager::updateCardStatus() {
-  static unsigned long lastCheckTime = 0;
+  static unsigned long lastCheckTime = 0;     // shared by all callers (main loop and web page)
   const unsigned long checkInterval = 1000;   // ms between checks
   const unsigned long retryDelay    = 3000;   // ms backoff after failure
   unsigned long now = millis();
 
-  // Don’t check too often
   if (now - lastCheckTime < checkInterval) return false;
   lastCheckTime = now;
 
@@ -83,9 +92,8 @@ bool SDManager::updateCardStatus() {
 
   bool currentlyPresent = false;
 
-  // --- Case 1: Card is *not* mounted right now ---
+  // --- Case 1: card is not mounted: try to mount it ---
   if (!cardPresent) {
-    // Respect retry backoff
     if (retryCount > 0 && now - lastRetryTime < retryDelay) {
       hostCom.println("⏳ Backing off SD retry...");
       return false;
@@ -93,7 +101,7 @@ bool SDManager::updateCardStatus() {
 
     hostCom.println("🔄 Attempting to mount SD...");
     if (SD.begin(cs, spi)) {
-      // Consider it present only if FS looks valid
+      // Consider it present only if the card reports a type and a size.
       currentlyPresent = (SD.cardType() != CARD_NONE && SD.cardSize() > 0);
     } else {
       hostCom.println("❌ SD.begin() failed");
@@ -103,14 +111,15 @@ bool SDManager::updateCardStatus() {
     retryCount++;
   }
 
-  // --- Case 2: Card *was* mounted, verify still OK ---
+  // --- Case 2: card was mounted: verify it still answers ---
   else {
     if (SD.cardType() == CARD_NONE || SD.cardSize() == 0) {
       hostCom.println("⚠️ SD card no longer responding, unmounting.");
       SD.end();
       currentlyPresent = false;
     } else {
-      // Optionally verify root access
+      // cardType()/cardSize() report values cached at mount time, so they
+      // don't prove the card is still there; opening the root is an extra check.
       File root = SD.open("/");
       if (!root) {
         hostCom.println("⚠️ Cannot access root directory, unmounting.");
@@ -119,12 +128,12 @@ bool SDManager::updateCardStatus() {
       } else {
         root.close();
         currentlyPresent = true;
-        retryCount = 0; // reset retry count
+        retryCount = 0;
       }
     }
   }
 
-  // --- If card status changed, update state + log ---
+  // --- On a state change: update, log card details, report the change ---
   if (currentlyPresent != cardPresent) {
     setCardPresent(currentlyPresent);
 
@@ -153,7 +162,6 @@ bool SDManager::updateCardStatus() {
       hostCom.print(SD.usedBytes() / (1024 * 1024));
       hostCom.println(" MB");
 
-      // ✅ Now it's safe to list root
       listRoot();
     } else {
       hostCom.println("🔴 SD card removed.");
@@ -188,39 +196,34 @@ void SDManager::listRoot() {
       hostCom.println(" bytes");
     }
 
-    file.close();                  // ✅ close before reassigning
+    file.close();                  // close each entry before opening the next
     file = root.openNextFile();
   }
 
-  root.close();                    // ✅ close the directory handle
+  root.close();
 }
 
 
-
-
+// Build "/<type>_YYYYMMDD_HHMM.txt" for the current 12-hour window, where HHMM
+// is 0000 (00:00-11:59) or 1200 (12:00-23:59).
 bool SDManager::updateFileNameIfChanged(char dataType, String &outFileName) {
-    time_t now = time(nullptr);
+    time_t now = time(nullptr);              // system clock, set from the ventilator (RTIM)
     struct tm *timeinfo = localtime(&now);
 
-    // Determine 12h interval start: set hour to 00 or 12, minute to 00
     int intervalHour = timeinfo->tm_hour < 12 ? 0 : 12;
-    // if 6h is needed:
-    
-    // Determine 6h interval start
+    // For 6-hour files instead, use:
     // int intervalHour = (timeinfo->tm_hour / 6) * 6;
 
-    // Create a copy of timeinfo to modify
+    // Start of the window: same date, hour 00 or 12, minute and second 0.
     struct tm intervalTime = *timeinfo;
     intervalTime.tm_hour = intervalHour;
     intervalTime.tm_min = 0;
     intervalTime.tm_sec = 0;
 
-    // Format timestamp as YYYYMMDD_HHMM
     char buffer[32];
     strftime(buffer, sizeof(buffer), "%Y%m%d_%H%M", &intervalTime);
     String generatedName;
 
-    // Prefix based on dataType
     if (dataType == 'M') {
         generatedName = "metrics_" + String(buffer) + ".txt";
     } else if (dataType == 'S') {
@@ -253,7 +256,7 @@ bool SDManager::updateFileNameIfChanged(char dataType, String &outFileName) {
 
 void SDManager::appendData(String data, char dataType) {
     String newFileName;
-    updateFileNameIfChanged(dataType, newFileName);
+    updateFileNameIfChanged(dataType, newFileName);   // only the path is needed here
     currentFileName = newFileName;
 
     File file = SD.open(currentFileName, FILE_APPEND);
@@ -280,13 +283,12 @@ void SDManager::deleteAllFiles(const char* path) {
 
     File entry = root.openNextFile();
     while (entry) {
-        String name = entry.name();
+        String name = entry.name();   // file name only, without directory
         if (entry.isDirectory()) {
             Serial.print("Skipping directory: ");
             Serial.println(name);
-            // Optionally: recursively delete contents
         } else {
-            String fullPath = "/" + name;
+            String fullPath = "/" + name;   // assumes path == "/"
             if (SD.remove(fullPath)) {
                 Serial.print("Deleted file: ");
                 Serial.println(fullPath);

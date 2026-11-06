@@ -11,20 +11,25 @@
 //  Tags used:
 //    READY        — boot banner
 //    OK / ERR     — command acknowledgement
-//    INFO         — free-form informational text (also used for "Data from:")
+//    INFO         — free-form informational text, HELP output
 //    DBG          — debug chatter (gated by DEBUG flag)
-//    SETTING      — settings rows + their header line
-//    METRIC       — metric rows + their header line
-//    ALARM        — alarm rows + their header line
-//    CURVE        — curve sample rows
-//    HEADER       — explicit header on demand (HEADER C/M/S/A)
+//    SETTING      — settings rows + their "Data from:" and label lines
+//    METRIC       — metric rows + their "Data from:" and label lines
+//    ALARM        — alarm rows + their "Data from:" and label lines
+//    CURVE        — curve sample rows + label line
+//    (The HEADER S/M/A/C command answers with the stream's own tag above,
+//     e.g. "METRIC\tTimestamp\t<labels>"; no line is tagged "HEADER".)
 //    STATUS       — STATUS command output
 //    FILE         — LIST output, one per file
 //    LIST_END
 //    DUMP_BEGIN / DUMP_END — bracket DUMP output (file content unmodified)
 //    MARK         — user marker injected with MARK command
 //
-//  All commands are case-insensitive.  See `HELP` at runtime.
+//  All commands are case-insensitive.  See `HELP` at runtime, and
+//  Documentation/DesignSummary.md section 5a for the full protocol.
+//
+//  Data streams are opt-in (all OFF at boot) and independent of SD logging:
+//  turning a stream on or off never changes what is written to the card.
 // -----------------------------------------------
 
 #include <Arduino.h>
@@ -34,6 +39,7 @@ class ServoCIEData;
 
 class HostCli {
 public:
+    /// Bits of streamMask. STREAM_DEBUG gates DBG lines rather than a data stream.
     enum StreamBit : uint8_t {
         STREAM_SETTING = 1 << 0,
         STREAM_METRIC  = 1 << 1,
@@ -43,6 +49,8 @@ public:
     };
 
     HostCli();
+    /// Give the CLI access to SD files and CIE data. Call before begin();
+    /// commands that need a missing object answer ERR instead of crashing.
     void attach(SDManager* sd, ServoCIEData* cie);
     void begin();      // call once after hostCom.begin()
     void update();     // call from loop()
@@ -73,10 +81,10 @@ private:
 
     uint8_t  streamMask       = 0;   // all streams OFF by default
     uint16_t curveDecimation  = 1;   // 1 = every sample, N = every Nth
-    uint16_t curveSampleCount = 0;
-    bool     curveHeaderSent  = false;
+    uint16_t curveSampleCount = 0;   // samples seen since the stream/rate was (re)set
+    bool     curveHeaderSent  = false; // re-armed on STREAM ON C
 
-    String   inBuf;                  // command-line accumulator
+    String   inBuf;                  // command-line accumulator (max 200 chars)
 
     // --- emission helpers ------------------------------------------------
     void emitTagged(const char* tag, const String& body);
