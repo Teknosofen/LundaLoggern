@@ -1,6 +1,6 @@
 # LundaLoggern — Design Summary
 
-**Version:** 1.2.0 (2026-04-24)  
+**Version:** 1.3.0 (2026-05-18)  
 **Author:** Åke L  
 **Platform:** LilyGo T-Display S3 (ESP32-S3)  
 **Framework:** Arduino (PlatformIO)
@@ -27,72 +27,203 @@ LundaLoggern is a portable, standalone data logger designed for **SERVO-u intens
 
 ### Pin Assignments
 
-| Signal | GPIO |
-|---|---|
-| HSPI MISO | 12 |
-| HSPI MOSI | 11 |
-| HSPI SCLK | 13 |
-| HSPI CS (SD) | 10 |
-| UART2 RX (ventilator) | 16 |
-| UART2 TX (ventilator) | 17 |
-| Interaction Button | 14 |
+| T-Display S3 GPIO | Firmware signal | Connected device / signal | Direction at logger |
+|---|---|---|---|
+| GPIO 12 | HSPI MISO | SD reader DO / MISO | SD reader → logger |
+| GPIO 11 | HSPI MOSI | SD reader DI / MOSI | Logger → SD reader |
+| GPIO 13 | HSPI SCLK | SD reader CLK / SCK | Logger → SD reader |
+| GPIO 10 | HSPI CS | SD reader CS | Logger → SD reader |
+| GPIO 16 | UART2 RX (`RXD2`) | RS232 transceiver receiver output (`RO`) | Transceiver → logger |
+| GPIO 17 | UART2 TX (`TXD2`) | RS232 transceiver driver input (`DI` / `TXD`) | Logger → transceiver |
+| GPIO 14 | Interaction button | Physical button input | Button → logger |
+
+UART2 runs at 38 400 baud, 8E1. Connect the UART pins to the logic-side pins of an RS232 transceiver; connect the transceiver's RS232 line side to the ventilator. Do not connect ESP32-S3 GPIO directly to RS232 voltage levels. The SD reader uses the dedicated HSPI bus and GPIO10 as chip select. Use a 3.3 V logic-compatible SD interface and a shared ground.
+
+![LilyGo T-Display S3 UART2 and SD reader pin layout](LundaLoggern_TDisplayS3_Pin_Layout.svg)
+
+To find the physical pins on the board, the LilyGo pinout drawing below has the pins used by LundaLoggern highlighted. Note that the project remaps HSPI with build flags (`HSPI_CS=10`, `HSPI_MOSI=11`, `HSPI_MISO=12`, `HSPI_SCLK=13` in `platformio.ini`), so the SD signals differ from LilyGo's default SPI labels, and that UART2 runs on GPIO16/17 rather than the UART1 pins LilyGo marks on GPIO18/17. The user button is the on-board IO14 key, not a header pin.
+
+![T-Display S3 pinout with the pins used by LundaLoggern highlighted: SD card (green), RS232/UART2 (amber) and the IO14 user button (blue)](LundaLoggern_TDisplayS3_Pinout_Annotated.png)
+
+### Hardware Design — Schematic and PCB
+
+The logger is built as a carrier board (EasyEDA design "LundaLoggern" V1.0, Teknosofen HB, 2025) that the T-Display S3 plugs into. It holds:
+
+- **U13 — MAX3221 RS232 transceiver** with charge-pump capacitors C1–C4 and decoupling capacitor C5 (all 100 nF). DIN is driven by GPIO17 (TXD2) and ROUT feeds GPIO16 (RXD2). EN# is tied to GND and FORCEON / FORCEOFF# to VCC, so the transceiver is always on. INVALID# is not connected.
+- **Vent-CIE — 3-pin header** (RSRX, RSTX, GND) for the cable to the ventilator's DB9 CIE port (DB9 pin 2 CIE RxD, pin 3 CIE TxD, pin 5 GND).
+- **U12 — microSD socket** wired in SPI mode: CD/DAT3 = CS (GPIO10), CMD = MOSI (GPIO11), DAT0 = MISO (GPIO12), CLK = SCLK (GPIO13). The socket's card-detect switch is wired to GPIO21, but the current firmware does not read it (card presence is polled through the SD library instead).
+- **I2C_1 … I2C_3 — three 4-pin expansion headers** (GND, 3V3, SDA, SCL) on GPIO43/GPIO44, for future sensors. They are not used by the current firmware.
+
+![PCB layout of the LundaLoggern carrier board: Vent-CIE header and MAX3221 top left, microSD socket top right, I2C headers in the middle, T-Display S3 footprint with USB-C at the bottom edge](Lundaloggern_PDB.webp)
+
+![Schematic of the LundaLoggern carrier board: MAX3221 RS232 transceiver, Vent-CIE header, microSD socket, I2C expansion headers and the T-Display S3 connection](Lundaloggern_SCH.webp)
 
 ---
 
 ## 3. Software Architecture
 
-### 3.1 Module Overview
+### 3.1 Architectural Style
 
+The firmware uses a small, loop-driven embedded architecture. `main.cpp` owns the global device objects and coordinates their lifecycle; it is the application controller rather than a separate controller class. Hardware-facing modules expose narrow C++ interfaces, while `ServoCIEData` owns the CIE parsing and channel-processing logic. Dependencies are passed by reference or pointer where practical (`SDManager` receives the SPI bus and `DateTime`; `ServoCIEData` receives `SDManager`; `HostCli` is attached to the storage and CIE objects during setup).
+
+### 3.2 Class Diagram
+
+The diagram shows active runtime dependencies. `QRHandler` is also implemented, but is currently not instantiated or called by `main.cpp`.
+
+```mermaid
+classDiagram
+    class main_cpp {
+        +setup()
+        +loop()
+        coordinates global objects
+    }
+    class ServoCIEData {
+        +begin() bool
+        +parseCIEData(char)
+        +CIE_comCheck() bool
+        +CIE_setup() bool
+        +initializeConfigs(paths)
+        +getServoID() String
+        +getBreathPhase() uint8_t
+    }
+    class SDManager {
+        +begin() bool
+        +updateCardStatus() bool
+        +appendData(data, type)
+        +writeTextFile(path, content) bool
+        +appendTextFile(path, content) bool
+        +deleteAllFiles(path)
+    }
+    class HostCli {
+        +attach(sd, cie)
+        +begin()
+        +update()
+        +emitSetting(body)
+        +emitMetric(body)
+        +emitAlarm(body)
+        +emitCurveSample()
+        +info(line)
+        +dbg(line)
+    }
+    class WifiApServer {
+        +begin()
+        +handleClient()
+        +setText(text)
+        +setLabel(index, label)
+        +enableSdFileDownloads(enable)
+        +enableSdFileDelete(enable)
+        +getApIpAddress() String
+    }
+    class ImageRenderer {
+        +begin()
+        +drawMainScreen()
+        +drawDateTimeAt(dt)
+        +drawServoID(id)
+        +drawSDStatusIndicator(present)
+        +drawCOMStatusIndicator(open)
+        +drawBreathPhase(phase)
+        +drawWiFiAPIP(ip, ssid)
+    }
+    class DateTime {
+        +toString() String
+        +rawString() String
+        +setRTC()
+        +readRTC()
+        +getRTC() DateTime
+        +isValid() bool
+    }
+    class Button {
+        +begin()
+        +handleInterrupt()
+        +update()
+        +wasPressed() bool
+        +wasReleased() bool
+        +wasLongPress() bool
+    }
+    class QRHandler {
+        +begin()
+        +showWiFiQR(ssid, password)
+        +showHomepageQR(url)
+        +showWiFiOff()
+        +isShowingHomepageQR() bool
+    }
+
+    main_cpp ..> ServoCIEData : creates and supervises
+    main_cpp ..> SDManager : creates and checks card
+    main_cpp ..> HostCli : attaches and services
+    main_cpp ..> WifiApServer : starts and services
+    main_cpp ..> ImageRenderer : updates display
+    main_cpp ..> Button : polls input
+    ServoCIEData --> SDManager : writes log rows
+    ServoCIEData ..> DateTime : parses and uses RTC time
+    HostCli --> SDManager : LIST and DUMP
+    HostCli --> ServoCIEData : status and stream data
+    SDManager --> DateTime : timestamps and file windows
+    ImageRenderer ..> DateTime : renders RTC value
+    QRHandler *-- QRCode : owns
+    QRHandler *-- TFT_eSPI : owns
 ```
-┌─────────────────────────────────────────────────────────┐
-│                      main.cpp                           │
-│         (setup / loop orchestration)                    │
-├───────────┬───────────┬───────────┬─────────────────────┤
-│ ServoCIE  │ SDManager │ WifiAp    │ ImageRenderer       │
-│ Data      │           │ Server    │                     │
-├───────────┼───────────┼───────────┼─────────────────────┤
-│ DateTime  │ Button    │ QRHandler │ Free_Fonts /        │
-│           │           │           │ Logo assets         │
-└───────────┴───────────┴───────────┴─────────────────────┘
-```
 
-### 3.2 Key Classes
+### 3.3 Class Interfaces
 
-| Class | Responsibility |
-|---|---|
-| **`ServoCIEData`** | CIE protocol parser and command engine. Manages metric, setting, curve, and alarm configurations. Handles serial communication with the ventilator, CRC calculation, data scaling, alarm state tracking, and log file writing via `SDManager`. |
-| **`WifiApServer`** | Creates a WiFi SoftAP and HTTP web server. Serves an HTML dashboard for file downloads, file deletion, and configuration review. Displays device logo and status labels. |
-| **`SDManager`** | Abstracts all SD card operations (init, read, write, append, delete, file listing). Monitors card presence and manages SPI bus access. Generates date-stamped file names via `DateTime`. |
-| **`ImageRenderer`** | Drives the TFT display via TFT_eSPI. Renders the main screen layout including logo, status indicators (SD, COM), WiFi info, ventilator ID, date/time, and breath-phase indicator. |
-| **`DateTime`** | Date/time value object with RTC integration. Provides formatted strings for timestamps and file naming. Parses time from ventilator RTIM responses. |
-| **`Button`** | Interrupt-driven button handler with debounce, short-press, and long-press detection. |
-| **`QRHandler`** | Generates and displays QR codes on the TFT for WiFi credentials and web server URLs. |
+| Class | Public interface and contract | Collaborators / notes |
+|---|---|---|
+| **`ServoCIEData`** | `begin()`, `parseCIEData(byte)`, `CIE_comCheck()`, and `CIE_setup()` manage CIE startup and byte-wise parsing. `initializeConfigs(...)` loads channel definitions. Getters expose device ID, breath phase, communication state, and alarm summaries. | Constructed with an `SDManager*`; writes metric, setting, and alarm rows through it. Uses `DateTime`/RTC for ventilator time. Channel configuration arrays are currently public. |
+| **`SDManager`** | `begin()` mounts the card; `updateCardStatus()` reports presence transitions; `appendData(data, type)` routes a data row to its rolling log; text-file methods provide basic file operations. Busy/card state is queryable. | Constructed with an SPI bus, chip-select pin, and `DateTime*`. Owns the SD logging and file-name window logic. |
+| **`HostCli`** | `attach(sd, cie)`, `begin()`, then non-blocking `update()` form the lifecycle. `emitSetting/Metric/Alarm/CurveSample()` mirror data only when the corresponding stream is enabled; `info()` and `dbg()` provide tagged output. | Receives `SDManager` and `ServoCIEData` pointers through `attach()`. Its command parser controls streams and provides status, headers, file listing/dump, and marker commands. |
+| **`WifiApServer`** | `begin()` starts the AP/server; `handleClient()` services HTTP requests. Setters update dashboard text/values/labels; feature toggles control SD download and delete actions; `getApIpAddress()` reports the AP address. | Constructed with SSID and password. Its HTTP server provides dashboard, file-manager, and configuration-viewer routes. |
+| **`ImageRenderer`** | `begin()` initializes the display; drawing methods update screen regions, device/time labels, SD/COM indicators, breath phase, and WiFi status. | Constructed with a `TFT_eSPI&`; `main.cpp` decides when status changes warrant a redraw. |
+| **`DateTime`** | Value object with field accessors/mutators, validity, `toString()`/`rawString()`, and RTC read/write helpers. | Shared timestamp source for log naming and display. The CIE time response is parsed by `ServoCIEData`. |
+| **`Button`** | `begin()` configures input; `handleInterrupt()` records edge events; `update()` advances press/debounce state; `wasPressed()`, `wasReleased()`, and `wasLongPress()` expose events to the caller. | `main.cpp` maps a long press to WiFi startup and a short press to WiFi shutdown. |
+| **`QRHandler`** | `begin()`, `showWiFiQR()`, `showHomepageQR()`, and `showWiFiOff()` draw QR screens; `isShowingHomepageQR()` reports its view state. | Uses its own `TFT_eSPI` and `QRCode` members. It is not currently connected to the main setup/loop path. |
 
-### 3.3 Data Flow
+`Configs` is the channel record shared by the CIE parser: it carries channel/label/unit metadata, scale and offset, raw and scaled values, and an active flag. It is a data structure rather than a service class.
+
+### 3.4 Runtime and Processing Logic
+
+1. **Startup (`setup()`)**: Initialize USB-CDC and attach/start `HostCli`; initialize the display, ventilator UART, SPI bus, and SD card; mount SPIFFS; load metric, setting, curve, and alarm configurations; then start CIE initialization. Configure the web dashboard, enable its SD actions, and initialize the physical button. WiFi itself remains off until the operator requests it.
+2. **Main loop (`loop()`)**: Each iteration reads available ventilator bytes and passes them to `ServoCIEData::parseCIEData()`, services HTTP requests and USB-CDC commands, and updates button state. A roughly 200 ms supervision interval refreshes the clock display, breath phase, and SD status; it also detects CIE timeouts and retries initialization when communication is down.
+3. **CIE frame processing**: The parser uses a run-mode state machine to identify frame type, validate/interpret payloads, and update configured channel values. Metric, setting, and alarm rows are appended to SD and offered to the matching optional `HostCli` stream. Alarm snapshots are emitted on alarm changes. Curve samples are offered to USB only after a complete configured sample set; curve decimation is applied by `HostCli`, and curve data is not written to SD in this firmware revision.
+4. **Time and files**: Ventilator time received during CIE initialization seeds the RTC. `SDManager` uses the timestamp to choose the active 12-hour file window and writes a header when a target log is new or empty. Configuration loading uses SD as the primary source and SPIFFS as fallback/sync, as detailed in § 4.
+5. **Operator controls**: A button long press starts the WiFi AP and web server; a short press disconnects the AP and turns WiFi off. The web server is serviced continuously from the main loop, while file access and downloads are handled through the SD/web interfaces.
+
+### 3.5 Data Flow
 
 ```
 SERVO-u Ventilator
-        │
-        │  RS232 / CIE protocol (38400 baud, 8E1)
-        ▼
-  ┌──────────────┐    parse & scale     ┌────────────┐
-  │ ServoCIEData │ ──────────────────►  │ SDManager  │
-  │  (parser)    │                      │ (SD card)  │
-  └──────┬───────┘                      └────────────┘
-         │                                    │
-         │ status updates                     │ file listing
-         ▼                                    ▼
-  ┌──────────────┐                     ┌──────────────┐
-  │ImageRenderer │                     │ WifiApServer │
-  │  (TFT)       │                     │ (HTTP)       │
-  └──────────────┘                     └──────────────┘
+        |
+        | RS232 / CIE protocol (38400 baud, 8E1)
+        v
+  +--------------+   parsed values   +------------+   file access   +--------------+
+  | ServoCIEData | -----------------> | SDManager  | -------------> | WifiApServer |
+  |   (parser)   |                    |  (SD card)|                 |    (HTTP)    |
+  +------+-------+                    +------------+                 +--------------+
+         |
+         | device and phase state
+         v
+    +----------+      status / time      +---------------+
+    | main.cpp | ----------------------> | ImageRenderer |
+    |   loop   |                         |     (TFT)     |
+    +----+-----+                         +---------------+
+         |
+         | button and HTTP servicing
+         +-------------------+
+         |                   |
+         v                   v
+     +--------+         +--------------+
+     | Button |         | WifiApServer |
+     +--------+         +--------------+
+
+ServoCIEData -- enabled tagged streams --> HostCli -- USB-CDC --> Host PC
+DateTime / RTC --------------------------> SDManager and main.cpp
 ```
 
-1. **Ventilator → ServoCIEData**: Raw bytes arrive on UART2 and are parsed character-by-character through a state machine (`RunModeType`). States include `Breath_Data`, `Value_Data`, `Phase_Data`, `Settings_Data`, `Trend_Data`, `Alarm_Data`, and `Error_Data`.
-2. **ServoCIEData → SDManager**: Parsed and scaled values (metrics, settings) and alarm priority/status pairs are formatted into tab-separated text lines and appended to date-stamped log files on the SD card (`metrics_*.txt`, `settings_*.txt`, `alarms_*.txt`).
-3. **ServoCIEData → ImageRenderer**: Device identity (type + serial number) and breath-phase state are pushed to the display.
-4. **SDManager → WifiApServer**: The web server lists SD files and serves them for download or deletion.
-5. **DateTime**: Ventilator-derived time (via `RTIM` command) seeds the internal RTC, which timestamps every logged data point and names log files.
+1. **Ventilator → `ServoCIEData`**: Raw bytes arrive on UART2 and are parsed character-by-character through the CIE state machine. Its run modes distinguish breath measurements, settings, curves, phase, trends, alarms, errors, and initialization responses.
+2. **`ServoCIEData` → `SDManager`**: Parsed and scaled metric and setting values, plus alarm priority/status snapshots, are formatted as tab-separated rows and appended to date-stamped files (`metrics_*.txt`, `settings_*.txt`, and `alarms_*.txt`). Alarm rows are written when subscribed alarm state changes. Curve samples are kept in memory and are not written to SD in this firmware revision.
+3. **`ServoCIEData` → `HostCli` → USB-CDC**: Metric, setting, and alarm rows are offered to `HostCli`, which emits them only when the corresponding streams are enabled. Complete curve sample sets can also be emitted, subject to curve decimation. USB streaming is independent of SD logging.
+4. **CIE state → `main.cpp` → `ImageRenderer`**: `main.cpp` reads device identity and breath phase from `ServoCIEData` and updates the TFT when needed. The parser does not call the renderer directly.
+5. **`SDManager` → `WifiApServer` → browser**: With WiFi enabled, the HTTP interface exposes SD files for listing, download, and deletion, as well as the configuration viewer. `main.cpp` services HTTP requests each loop iteration.
+6. **Ventilator time → `DateTime` → logs and display**: The CIE `RTIM` response seeds the RTC. `DateTime` supplies timestamps for log naming and display updates.
 
 ---
 
@@ -207,7 +338,7 @@ The label order in the header matches the channel order in `AlarmConfig.txt`. To
 
 ### `curves_YYYYMMDD_HHMM.txt`
 
-Reserved for waveform data (Flow / Press / Volume / Edi / FCO2). Curve data is currently parsed and stored in memory but not written to SD in the present firmware revision; the file name pattern is provided for forward-compatibility.
+Reserved for waveform data (Flow / Press / Volume / Edi / FCO2). Curve data is currently parsed and stored in memory but **not written to SD** in the present firmware revision; the file name pattern is provided for forward-compatibility. Curve samples can, however, be streamed live over the USB-CDC port — see **§ 5a. USB-CDC Command Interface (HostCli)**.
 
 ### `log.txt`
 
@@ -224,6 +355,134 @@ The device communicates with SERVO ventilators using the **CIE (Computer Interfa
 - **Data subscription**: Sends `SDADB` / `SDADS` / `SDADA` / `SDADC` commands to subscribe to breath data, settings, alarm, and curve channels respectively.
 - **Framing**: Uses `EOT` (0x04) and `ESC` (0x1B) as delimiters; CRC-8 for integrity.
 - **Timeout handling**: If no data is received for 8 seconds, the connection is marked lost and re-initialization is attempted every 5 seconds.
+
+---
+
+## 5a. USB-CDC Command Interface (HostCli)
+
+In addition to the ventilator-facing RS232 link, the device exposes a **line-oriented command and streaming interface on the USB-CDC port** (`hostCom`, 115 200 baud). This lets a connected PC selectively mirror logged data live, replay SD log files, and query device status — without touching the SD card or the WiFi web UI.
+
+The interface is implemented by the `HostCli` class ([`include/HostCli.hpp`](../include/HostCli.hpp), [`src/HostCli.cpp`](../src/HostCli.cpp)). It is non-blocking and runs from the main loop via `hostCli.update()`.
+
+### 5a.1 Wire format
+
+All output lines are **tab-separated** and begin with an uppercase **TAG** that identifies their category. Lines are terminated by `\n`. The boot banner is:
+
+```
+READY	<version>	<SSID>
+INFO	Type HELP for commands. All data streams are OFF at boot.
+```
+
+| Tag | Meaning |
+|---|---|
+| `READY` | Boot banner, emitted once after reset |
+| `OK` | Command accepted; payload echoes effective state |
+| `ERR` | Command rejected; payload describes the reason |
+| `INFO` | Free-form informational text (also used inside `HELP` output) |
+| `DBG` | Debug chatter; only emitted when `DEBUG ON` |
+| `SETTING` | One settings row (or header/`Data from:` line) |
+| `METRIC` | One metric row (or header/`Data from:` line) |
+| `ALARM` | One alarm-state row (or header/`Data from:` line) |
+| `CURVE` | One curve sample row, or the curve header line |
+| `HEADER` | Explicit label header emitted by the `HEADER` command |
+| `STATUS` | Key-value status line (`STATUS\t<key>=<value>`) |
+| `FILE` | One entry in the `LIST` response (`FILE\t<name>\t<size>`) |
+| `LIST_END` | End-of-list marker for `LIST` |
+| `DUMP_BEGIN` / `DUMP_END` | Bracket raw file content emitted by `DUMP` |
+| `MARK` | User-injected marker (`MARK\t<timestamp>\t<text>`) |
+
+Data rows reuse the **same format as the SD log files**: the first `*` line of a stream is `Data from: <ServoID>`, the second is `Timestamp\t<label1>\t<label2>…`, and subsequent rows are `<RTC time>\t<v1>\t<v2>…`. Each such line is simply prefixed with its stream tag on the USB side, e.g.
+
+```
+METRIC	Data from: SERVO-u 12345
+METRIC	Timestamp	VtCO2	MVe	RR	…
+METRIC	2026-05-18 14:03:11	12.0	6.4	18	…
+```
+
+### 5a.2 Default state at boot
+
+- All four data streams (Setting, Metric, Alarm, Curve) are **OFF**.
+- `DEBUG` is **OFF**.
+- Curve decimation is **1** (every sample emitted when the stream is on).
+- Free-form `hostCom.println(...)` startup/WiFi messages that predate HostCli still appear (untagged) — they are informational and do not interfere with tagged lines.
+
+### 5a.3 Commands
+
+Commands are case-insensitive and terminated by `\n` (CR is ignored). Maximum input line length is 200 characters; an oversize line is rejected with `ERR\tinput line too long`.
+
+| Command | Effect |
+|---|---|
+| `HELP`, `?` | List all commands |
+| `VERSION`, `VER` | `OK\tVERSION <fw>` |
+| `STATUS` | Emit a block of `STATUS\tkey=value` lines (fw, servoID, comOpen, sdPresent, rtc, psramFree, heapFree, wifiClients, stream, curveRate) terminated by `OK\tSTATUS` |
+| `STREAM ON S\|M\|A\|C\|*` | Enable one or more data streams |
+| `STREAM OFF S\|M\|A\|C\|*` | Disable one or more data streams |
+| `STREAM ?` | Report current mask as `SMACD` (each char is the letter if enabled, `-` if not). The 5th char is the `DEBUG` flag. |
+| `DEBUG ON\|OFF\|?` | Gate `DBG` lines |
+| `HEADER S\|M\|A\|C` | Re-emit the current label header for that stream (useful when a PC tool attaches mid-session) |
+| `RATE C <n>` | Emit every Nth curve sample, `n ∈ [1, 10000]`. Decimation is currently only supported on the curve stream. |
+| `FORMAT [TSV\|?]` | Reports/sets output format. Only `TSV` is supported in this build; the command exists so a PC tool can probe and future formats can be added without protocol changes. |
+| `LIST` | List files on the SD card root as `FILE\t<name>\t<size>` lines, followed by `LIST_END` and `OK\tLIST` |
+| `DUMP <filename>` | Stream the contents of an SD file verbatim, bracketed by `DUMP_BEGIN\t<path>\t<size>` and `DUMP_END\t<path>`. File content is emitted **unmodified** (no per-line tagging) so the same parser used on the SD card can consume it directly. |
+| `MARK <text>` | Inject `MARK\t<RTC time>\t<text>` — useful for annotating tests |
+| `TIME` | Report RTC time. Setting the RTC from the host is intentionally rejected (`ERR`) because the firmware syncs the RTC from the ventilator on every CIE init. |
+
+### 5a.4 Curve streaming
+
+Curves are **not** logged to SD (see § 4a `curves_*.txt`). They are only available over USB-CDC, and only when explicitly enabled. The first sample emitted after `STREAM ON C` is preceded by a header line:
+
+```
+CURVE	Timestamp	<label0>	<label1>	…
+CURVE	2026-05-18 14:03:11.42	12.7	-3.1	0.05	…
+```
+
+Labels and channel count come from `CurveConfig.txt`. Values are the scaled floats from `curves[i].scaled`, formatted with 2 decimal places. One `CURVE` row is emitted per **complete sample set** (i.e. once all `curveCount` channels have been refreshed), subject to the `RATE C <n>` decimation factor.
+
+> **Bandwidth caution.** At native rate the SERVO curve channel produces tens of samples per second across multiple channels. The USB-CDC link can carry this, but: (1) it can saturate slow terminal programs, and (2) printing curves while also running `STREAM ON M S A` and `DEBUG ON` will interleave a lot of text. Use `RATE C n` to thin the stream, or only enable curves for short captures.
+
+### 5a.5 Example session
+
+```
+> VERSION
+OK	VERSION 1.3.0
+
+> STREAM ON M,A
+OK	STREAM -M A--
+
+> HEADER M
+METRIC	Timestamp	VtCO2	MVe	RR	…
+OK	HEADER M
+
+> STATUS
+STATUS	fw=1.3.0
+STATUS	servoID=SERVO-u 12345
+STATUS	comOpen=1
+STATUS	sdPresent=1
+STATUS	rtc=2026-05-18 14:03:11
+STATUS	psramFree=2087612
+STATUS	heapFree=204880
+STATUS	wifiClients=0
+STATUS	stream=-M A--
+STATUS	curveRate=1/1
+OK	STATUS
+
+> DUMP metrics_20260518_1200.txt
+DUMP_BEGIN	/metrics_20260518_1200.txt	4821
+Data from: SERVO-u 12345
+Timestamp	VtCO2	MVe	RR	…
+2026-05-18 12:00:04	12.0	6.4	18	…
+…
+DUMP_END	/metrics_20260518_1200.txt
+OK	DUMP /metrics_20260518_1200.txt
+```
+
+### 5a.6 Integration points
+
+- `setup()` in [`src/main.cpp`](../src/main.cpp) calls `hostCli.attach(&sd, &servoCIEData); hostCli.begin();`.
+- `loop()` calls `hostCli.update();` once per iteration.
+- The Setting/Metric/Alarm emit sites in [`src/ServoCIEData.cpp`](../src/ServoCIEData.cpp) now call `hostCli.emitSetting/Metric/Alarm(dataStr)` instead of writing directly to `hostCom`. SD logging is unaffected.
+- `handleValueData()` calls `hostCli.emitCurveSample()` whenever `CurveCounter` wraps back to 0, i.e. once per complete sample set.
+- Bulky `[DBG] appendData …` lines in [`src/SDManager.cpp`](../src/SDManager.cpp) are routed through `hostCli.dbg(...)` and are silent unless `DEBUG ON` is in effect.
 
 ---
 
@@ -364,6 +623,7 @@ LundaLoggern/
 │   ├── ServoCIEData.hpp        # CIE protocol & data management
 │   ├── SDmanager.hpp           # SD card abstraction
 │   ├── WifiApServer.hpp        # WiFi AP & HTTP server
+│   ├── HostCli.hpp             # USB-CDC command / stream interface
 │   ├── ImageRenderer.hpp       # TFT display rendering
 │   ├── DateTime.hpp            # Date/time object & RTC
 │   ├── Button.hpp              # Button input handler
@@ -375,6 +635,7 @@ LundaLoggern/
 │   ├── ServoCIEData.cpp
 │   ├── SDManager.cpp
 │   ├── WifiApServer.cpp
+│   ├── HostCli.cpp
 │   ├── ImageRenderer.cpp
 │   ├── DateTime.cpp
 │   ├── Button.cpp
